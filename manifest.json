@@ -1,0 +1,21 @@
+{
+    "name": "P2P Communicator",
+    "short_name": "P2P Chat",
+    "start_url": ".",
+    "display": "standalone",
+    "background_color": "#2b2d31",
+    "theme_color": "#2b2d31",
+    "description": "Secure, decentralized, real-time communication directly in your browser.",
+    "icons": [
+        {
+            "src": "favicon.ico",
+            "type": "image/png",
+            "sizes": "192x192"
+        },
+        {
+            "src": "favicon.ico",
+            "type": "image/png",
+            "sizes": "512x512"
+        }
+    ]
+}
