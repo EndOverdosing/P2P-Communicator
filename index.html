@@ -561,19 +561,30 @@
             const setupDataConnection = (conn) => {
                 dataConnection = conn;
                 conn.on('open', async () => {
-                    log('Data connection established with:', conn.peer); updateStatus(`Connected!`, 'success');
+                    log('Data connection established with:', conn.peer);
+                    updateStatus(`Connected!`, 'success');
                     ui.messageInput.disabled = false;
                     ui.roomIdDisplay.textContent = `Connected to ${conn.peer.slice(0, 6)}...`;
+
                     await startMedia();
+
                     if (!document.querySelector(`[data-peer-id="${peer.id}"]`)) {
                         addVideoStream(peer.id, localStream, true);
                     }
+
+                    showCallUI(true);
+
+                    await new Promise(resolve => setTimeout(resolve, 500));
+
                     const call = peer.call(conn.peer, localStream);
                     setupMediaConnection(call);
-                    showCallUI(true);
                 });
                 conn.on('data', data => { addMessageToUI(data.sender, data.text); });
-                conn.on('close', () => { log('Peer disconnected:', conn.peer); removeVideoStream(conn.peer); updateStatus("Peer has disconnected.", "error"); });
+                conn.on('close', () => {
+                    log('Peer disconnected:', conn.peer);
+                    removeVideoStream(conn.peer);
+                    updateStatus("Peer has disconnected.", "error");
+                });
                 conn.on('error', err => { log('Data connection error:', err); });
             };
 
@@ -618,6 +629,14 @@
                         localStream.getAudioTracks()[0].enabled = !state.isMuted;
                     }
                     log('Local stream obtained:', localStream.getTracks().map(t => `${t.kind}: ${t.enabled}`));
+
+                    if (document.querySelector(`[data-peer-id="${peer.id}"]`)) {
+                        const localVideo = document.querySelector(`[data-peer-id="${peer.id}"] video`);
+                        if (localVideo) {
+                            localVideo.srcObject = localStream;
+                        }
+                    }
+
                     return localStream;
                 } catch (err) {
                     log('Error getting user media:', err);
@@ -671,6 +690,8 @@
                     const screenAudioTrack = screenStream.getAudioTracks()[0];
                     const micAudioTrack = micStream.getAudioTracks()[0];
 
+                    micAudioTrack.enabled = !state.isMuted;
+
                     const combinedStream = new MediaStream([screenTrack, micAudioTrack]);
                     if (screenAudioTrack) {
                         combinedStream.addTrack(screenAudioTrack);
@@ -688,7 +709,11 @@
                         startMedia().then(() => replaceStream(localStream));
                     };
 
-                } catch (err) { log('Screen share failed:', err); }
+                } catch (err) {
+                    log('Screen share failed:', err);
+                    state.isScreenSharing = false;
+                    ui.shareScreenBtn.classList.remove('active');
+                }
             };
 
             const replaceStream = (newStream) => {
@@ -807,8 +832,10 @@
 
                 ui.muteBtn.onclick = () => {
                     state.isMuted = !state.isMuted;
-                    if (localStream && localStream.getAudioTracks()[0]) {
-                        localStream.getAudioTracks()[0].enabled = !state.isMuted;
+                    if (localStream) {
+                        localStream.getAudioTracks().forEach(track => {
+                            track.enabled = !state.isMuted;
+                        });
                     }
                     ui.muteBtn.classList.toggle('danger', state.isMuted);
                     ui.muteBtn.innerHTML = state.isMuted ? '<i class="fa-solid fa-microphone-slash"></i>' : '<i class="fa-solid fa-microphone"></i>';
