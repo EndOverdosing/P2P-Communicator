@@ -233,7 +233,7 @@
         .video-grid {
             flex-grow: 1;
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
             gap: 0.5rem;
             padding: 0.5rem;
             align-content: center;
@@ -258,7 +258,7 @@
             bottom: 0;
             left: 0;
             right: 0;
-            padding: 0.5rem 0.75rem;
+            padding: 0.5rem;
             background: linear-gradient(to top, rgba(0, 0, 0, 0.7), transparent);
             color: white;
             font-weight: 600;
@@ -278,12 +278,6 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
-            z-index: 10;
-        }
-
-        .call-actions {
-            display: flex;
-            gap: 0.75rem;
         }
 
         .call-actions button {
@@ -295,8 +289,9 @@
             font-size: 1.1rem;
         }
 
-        .call-actions button.active {
-            background-color: var(--success);
+        .call-actions button.active,
+        .call-actions button:hover {
+            background-color: var(--primary-accent);
         }
 
         .call-actions button.danger {
@@ -314,11 +309,6 @@
 
         .fullscreen-toggle button {
             background-color: transparent;
-            color: var(--secondary-text);
-        }
-
-        .fullscreen-toggle button:hover {
-            color: var(--header-text);
         }
 
         .chat-sidebar {
@@ -375,13 +365,12 @@
 
         .message-content .text {
             line-height: 1.6;
-            color: #dcddde;
+            color: var(--secondary-text);
         }
 
         #message-form {
             padding: 1.25rem;
             flex-shrink: 0;
-            border-top: 1px solid var(--border-color);
         }
 
         #message-form input {
@@ -495,7 +484,7 @@
                     <div id="video-grid" class="video-grid"></div>
                     <div class="main-controls-bar">
                         <div class="room-info">
-                            <p id="room-id-display">Connecting...</p>
+                            <p id="room-id-display"></p>
                         </div>
                         <div class="call-actions">
                             <button id="mute-btn" title="Mute/Unmute"><i class="fa-solid fa-microphone"></i></button>
@@ -503,6 +492,8 @@
                                     class="fa-solid fa-video"></i></button>
                             <button id="share-screen-btn" title="Share Screen"><i
                                     class="fa-solid fa-display"></i></button>
+                            <button id="debug-mic-btn" title="Re-request Microphone Access" class="secondary"><i
+                                    class="fa-solid fa-wrench"></i></button>
                             <button id="stop-call-btn" title="Leave Call" class="danger"><i
                                     class="fa-solid fa-phone"></i></button>
                         </div>
@@ -526,174 +517,296 @@
         document.addEventListener('DOMContentLoaded', () => {
             const ls = { get: (k, f) => { try { return localStorage.getItem(k) || f; } catch (e) { return f; } }, set: (k, v) => { try { localStorage.setItem(k, v); } catch (e) { } }, getJSON: (k, f) => JSON.parse(ls.get(k, JSON.stringify(f))), setJSON: (k, v) => ls.set(k, JSON.stringify(v)) };
             const ui = {
-                setupSection: document.getElementById('setup-section'), callSection: document.getElementById('call-section'), callContainer: document.getElementById('call-container'), heroHeader: document.querySelector('.hero-header'), myIdInput: document.getElementById('my-id'), usernameInput: document.getElementById('username-input'), remoteIdInput: document.getElementById('remote-id-input'), saveUsernameBtn: document.getElementById('save-username-btn'), renewIdBtn: document.getElementById('renew-id-btn'), copyIdBtn: document.getElementById('copy-id-btn'), joinBtn: document.getElementById('join-btn'), videoGrid: document.getElementById('video-grid'), muteBtn: document.getElementById('mute-btn'), toggleVideoBtn: document.getElementById('toggle-video-btn'), shareScreenBtn: document.getElementById('share-screen-btn'), stopCallBtn: document.getElementById('stop-call-btn'), fullscreenBtn: document.getElementById('fullscreen-btn'), roomIdDisplay: document.getElementById('room-id-display'), messagesDiv: document.getElementById('messages'), messageForm: document.getElementById('message-form'), messageInput: document.getElementById('message-input'), statusDiv: document.getElementById('status'), contextMenu: document.getElementById('custom-context-menu'), contextVolumeSlider: document.getElementById('context-volume-slider')
+                setupSection: document.getElementById('setup-section'), callSection: document.getElementById('call-section'), callContainer: document.getElementById('call-container'), myIdInput: document.getElementById('my-id'), usernameInput: document.getElementById('username-input'), remoteIdInput: document.getElementById('remote-id-input'), saveUsernameBtn: document.getElementById('save-username-btn'), renewIdBtn: document.getElementById('renew-id-btn'), copyIdBtn: document.getElementById('copy-id-btn'), joinBtn: document.getElementById('join-btn'), videoGrid: document.getElementById('video-grid'), muteBtn: document.getElementById('mute-btn'), toggleVideoBtn: document.getElementById('toggle-video-btn'), shareScreenBtn: document.getElementById('share-screen-btn'), debugMicBtn: document.getElementById('debug-mic-btn'), stopCallBtn: document.getElementById('stop-call-btn'), fullscreenBtn: document.getElementById('fullscreen-btn'), roomIdDisplay: document.getElementById('room-id-display'), messagesDiv: document.getElementById('messages'), messageForm: document.getElementById('message-form'), messageInput: document.getElementById('message-input'), statusDiv: document.getElementById('status'), contextMenu: document.getElementById('custom-context-menu'), contextVolumeSlider: document.getElementById('context-volume-slider')
             };
-            let peer, localStream;
-            let peers = {};
+            let peer, dataConnection;
+            let localStream = null;
+            let mediaConnections = {};
             let state = { username: ls.get('username', 'User'), isMuted: false, isVideoEnabled: true, isScreenSharing: false };
             const log = (...args) => console.log('[P2P DEBUG]', ...args);
 
             const updateStatus = (message, type = 'info') => { ui.statusDiv.textContent = message; const c = { error: 'var(--error)', success: 'var(--success)' }; ui.statusDiv.style.color = c[type] || 'var(--secondary-text)'; };
-            const showCallUI = (show) => { ui.setupSection.classList.toggle('hidden', !show); ui.callSection.classList.toggle('hidden', !show); ui.heroHeader.classList.toggle('hidden', show); };
+            const showCallUI = (show) => { ui.setupSection.classList.toggle('hidden', show); ui.callSection.classList.toggle('hidden', !show); ui.heroHeader.classList.toggle('hidden', show); };
 
             const initializePeer = (forceNew = false) => {
                 log('Initializing Peer...'); updateStatus('Initializing Peer...'); if (peer) peer.destroy(); const peerId = forceNew ? null : ls.get('myPeerId', null);
                 const peerConfig = { config: { 'iceServers': [{ urls: 'stun:stun.l.google.com:19302' }, { urls: "turn:openrelay.metered.ca:80", username: "openrelayproject", credential: "openrelayproject" }] } };
                 peer = peerId ? new Peer(peerId, peerConfig) : new Peer(peerConfig);
-
-                peer.on('open', id => { log('PeerJS connection established. My ID:', id); ls.set('myPeerId', id); ui.myIdInput.value = id; updateStatus('Ready to connect.', 'success'); });
+                peer.on('open', id => { log('PeerJS connection to server established. My ID:', id); ls.set('myPeerId', id); ui.myIdInput.value = id; updateStatus('Ready to connect.', 'success'); });
                 peer.on('connection', conn => { log('Incoming data connection from:', conn.peer); setupDataConnection(conn); });
-                peer.on('call', call => { log('Incoming media call from:', call.peer); call.answer(localStream); setupMediaConnection(call); });
+                peer.on('call', call => {
+                    log('Incoming media call from:', call.peer);
+                    if (!localStream) {
+                        log('No local stream, starting media first...');
+                        startMedia().then(() => {
+                            call.answer(localStream);
+                            setupMediaConnection(call);
+                        });
+                    } else {
+                        call.answer(localStream);
+                        setupMediaConnection(call);
+                    }
+                });
                 peer.on('error', err => { log('PEERJS ERROR:', err); updateStatus(`${err.message}`, 'error'); });
             };
 
+            const connectToPeer = (remoteId) => {
+                if (!remoteId || !peer) return updateStatus('Please enter a valid peer ID.', 'error');
+                if (remoteId === peer.id) return updateStatus("You can't connect to your own ID.", 'error');
+                log(`Attempting to connect to peer: ${remoteId}`); updateStatus(`Connecting to ${remoteId}...`);
+                const conn = peer.connect(remoteId, { reliable: true });
+                setupDataConnection(conn);
+            };
+
             const setupDataConnection = (conn) => {
-                conn.on('open', () => {
-                    log('Data connection is open with:', conn.peer);
+                dataConnection = conn;
+                conn.on('open', async () => {
+                    log('Data connection established with:', conn.peer); updateStatus(`Connected!`, 'success');
                     ui.messageInput.disabled = false;
                     ui.roomIdDisplay.textContent = `Connected to ${conn.peer.slice(0, 6)}...`;
-                    peers[conn.peer] = { conn: conn };
-                    startCall(conn.peer);
+                    await startMedia();
+                    if (!document.querySelector(`[data-peer-id="${peer.id}"]`)) {
+                        addVideoStream(peer.id, localStream, true);
+                    }
+                    const call = peer.call(conn.peer, localStream);
+                    setupMediaConnection(call);
+                    showCallUI(true);
                 });
-                conn.on('data', data => addMessageToUI(data.sender, data.text));
-                conn.on('close', () => { log('Peer disconnected:', conn.peer); removeParticipant(conn.peer); updateStatus("Peer has disconnected.", "error"); });
+                conn.on('data', data => { addMessageToUI(data.sender, data.text); });
+                conn.on('close', () => { log('Peer disconnected:', conn.peer); removeVideoStream(conn.peer); updateStatus("Peer has disconnected.", "error"); });
+                conn.on('error', err => { log('Data connection error:', err); });
             };
 
             const setupMediaConnection = (call) => {
+                const peerId = call.peer;
+                log('Setting up media connection with:', peerId);
+
                 call.on('stream', remoteStream => {
-                    log('Received remote stream from:', call.peer);
-                    if (!document.querySelector(`[data-peer-id="${call.peer}"]`)) {
-                        addVideoStream(call.peer, remoteStream);
-                    }
+                    log('Received remote stream from:', peerId);
+                    addVideoStream(peerId, remoteStream);
                 });
-                call.on('close', () => { log('Call closed with:', call.peer); removeParticipant(call.peer); });
-                peers[call.peer].call = call;
+
+                call.on('close', () => {
+                    log('Call closed with:', peerId);
+                    removeVideoStream(peerId);
+                    delete mediaConnections[peerId];
+                });
+
+                call.on('error', err => {
+                    log('Media call error with', peerId, ':', err);
+                });
+
+                mediaConnections[peerId] = call;
             };
 
-            const startCall = async (remoteId) => {
-                showCallUI(true);
-                updateStatus("Starting camera...", "info");
+            const startMedia = async () => {
+                if (localStream) {
+                    localStream.getTracks().forEach(track => track.stop());
+                    localStream = null;
+                }
                 try {
-                    localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-                    log("Local stream acquired.");
-                    updateStatus("Waiting for peer...", "info");
-                    addVideoStream(peer.id, localStream, true);
-                    const call = peer.call(remoteId, localStream);
-                    setupMediaConnection(call);
+                    localStream = await navigator.mediaDevices.getUserMedia({ video: state.isVideoEnabled, audio: true });
+                    localStream.getAudioTracks()[0].enabled = !state.isMuted;
+                    log('Local stream obtained:', localStream.getTracks().map(t => `${t.kind}: ${t.enabled}`));
+                    return localStream;
                 } catch (err) {
-                    log('Failed to get local stream', err);
+                    log('Error getting user media:', err);
                     updateStatus('Could not access camera/mic.', 'error');
+                    throw err;
                 }
             };
 
+            const debugMicrophone = async () => {
+                log('Debug: Re-requesting microphone access...');
+                try {
+                    if (localStream) {
+                        localStream.getTracks().forEach(track => track.stop());
+                        localStream = null;
+                    }
+
+                    const newStream = await navigator.mediaDevices.getUserMedia({
+                        video: state.isVideoEnabled,
+                        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }
+                    });
+
+                    localStream = newStream;
+                    localStream.getAudioTracks()[0].enabled = !state.isMuted;
+
+                    log('New stream obtained:', localStream.getTracks().map(t => `${t.kind}: ${t.enabled}`));
+
+                    replaceStream(localStream);
+                    updateStatus('Microphone re-initialized', 'success');
+                } catch (err) {
+                    log('Debug mic error:', err);
+                    updateStatus('Failed to access microphone', 'error');
+                }
+            };
+
+            const startScreenShare = async () => {
+                try {
+                    const screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
+                    const micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+
+                    const screenTrack = screenStream.getVideoTracks()[0];
+                    const screenAudioTrack = screenStream.getAudioTracks()[0];
+                    const micAudioTrack = micStream.getAudioTracks()[0];
+
+                    const combinedStream = new MediaStream([screenTrack, micAudioTrack]);
+                    if (screenAudioTrack) {
+                        combinedStream.addTrack(screenAudioTrack);
+                    }
+
+                    localStream = combinedStream;
+                    replaceStream(localStream);
+                    state.isScreenSharing = true;
+                    ui.shareScreenBtn.classList.add('active');
+
+                    screenTrack.onended = () => {
+                        log('Screen share ended.');
+                        state.isScreenSharing = false;
+                        ui.shareScreenBtn.classList.remove('active');
+                        startMedia().then(() => replaceStream(localStream));
+                    };
+
+                } catch (err) { log('Screen share failed:', err); }
+            };
+
+            const replaceStream = (newStream) => {
+                log('Replacing stream in all connections');
+                const localVideo = document.querySelector(`[data-peer-id="${peer.id}"] video`);
+                if (localVideo) {
+                    localVideo.srcObject = newStream;
+                }
+
+                Object.values(mediaConnections).forEach(call => {
+                    const pc = call.peerConnection;
+                    if (!pc) return;
+
+                    const videoSender = pc.getSenders().find(s => s.track && s.track.kind === 'video');
+                    if (videoSender && newStream.getVideoTracks()[0]) {
+                        videoSender.replaceTrack(newStream.getVideoTracks()[0]).catch(err => log('Error replacing video track:', err));
+                    }
+
+                    const audioSender = pc.getSenders().find(s => s.track && s.track.kind === 'audio');
+                    if (audioSender && newStream.getAudioTracks()[0]) {
+                        audioSender.replaceTrack(newStream.getAudioTracks()[0]).catch(err => log('Error replacing audio track:', err));
+                    }
+                });
+            };
+
             const addVideoStream = (id, stream, isLocal = false) => {
-                if (document.querySelector(`[data-peer-id="${id}"]`)) return;
+                if (document.querySelector(`[data-peer-id="${id}"]`)) {
+                    log('Video tile already exists for:', id);
+                    return;
+                }
+                log('Adding video stream for:', id, 'isLocal:', isLocal);
                 const tile = document.createElement('div');
                 tile.className = 'participant-tile';
                 tile.dataset.peerId = id;
                 const video = document.createElement('video');
                 video.srcObject = stream;
                 video.autoplay = true;
+                video.playsInline = true;
                 if (isLocal) video.muted = true;
 
                 const infoBar = document.createElement('div');
                 infoBar.className = 'info-bar';
-                infoBar.textContent = isLocal ? state.username + ' (You)' : (peers[id]?.conn.metadata?.username || 'Peer');
+                infoBar.textContent = isLocal ? state.username + ' (You)' : id.slice(0, 6);
 
                 tile.append(video, infoBar);
                 ui.videoGrid.append(tile);
+                updateGridLayout();
             };
 
-            const removeParticipant = (id) => {
+            const removeVideoStream = (id) => {
                 const tile = document.querySelector(`[data-peer-id="${id}"]`);
-                if (tile) tile.remove();
-                if (peers[id]) delete peers[id];
-            };
-
-            const replaceStreamForAllPeers = (newStream) => {
-                Object.values(peers).forEach(p => {
-                    if (p.call) {
-                        const videoTrack = newStream.getVideoTracks()[0];
-                        const audioTrack = newStream.getAudioTracks()[0];
-                        replaceTrackForPeer(p.call, videoTrack, 'video');
-                        replaceTrackForPeer(p.call, audioTrack, 'audio');
+                if (tile) {
+                    const video = tile.querySelector('video');
+                    if (video && video.srcObject) {
+                        video.srcObject.getTracks().forEach(track => track.stop());
                     }
-                });
-                const localVideo = document.querySelector(`[data-peer-id="${peer.id}"] video`);
-                if (localVideo) localVideo.srcObject = newStream;
-                localStream = newStream;
-            };
-
-            const replaceTrackForPeer = (call, newTrack, kind) => {
-                const sender = call.peerConnection.getSenders().find(s => s.track && s.track.kind === kind);
-                if (sender) {
-                    sender.replaceTrack(newTrack).catch(e => log(`Error replacing ${kind} track:`, e));
+                    tile.remove();
                 }
+                delete mediaConnections[id];
+                updateGridLayout();
             };
 
-            const toggleScreenShare = async () => {
-                if (state.isScreenSharing) {
-                    const cameraStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-                    replaceStreamForAllPeers(cameraStream);
-                    state.isScreenSharing = false;
-                    ui.shareScreenBtn.classList.remove('active');
-                } else {
-                    try {
-                        const screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
-                        const micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-                        const combinedStream = new MediaStream([
-                            screenStream.getVideoTracks()[0],
-                            micStream.getAudioTracks()[0]
-                        ]);
-                        if (screenStream.getAudioTracks()[0]) {
-                            combinedStream.addTrack(screenStream.getAudioTracks()[0]);
-                        }
-                        replaceStreamForAllPeers(combinedStream);
-                        state.isScreenSharing = true;
-                        ui.shareScreenBtn.classList.add('active');
-                        screenStream.getVideoTracks()[0].onended = () => toggleScreenShare();
-                    } catch (err) { log('Screen share failed', err); }
+            const updateGridLayout = () => {
+                const tiles = ui.videoGrid.querySelectorAll('.participant-tile');
+
+                tiles.forEach(t => t.classList.remove('screen-share'));
+
+                if (state.isScreenSharing && document.querySelector(`[data-peer-id="${peer.id}"]`)) {
+                    document.querySelector(`[data-peer-id="${peer.id}"]`).classList.add('screen-share');
                 }
             };
 
             const addMessageToUI = (sender, text) => {
                 const msgDiv = document.createElement('div');
                 msgDiv.className = 'message';
-                msgDiv.innerHTML = `<div class="message-avatar"></div><div class="message-content"><div class="header"><span class="username">${sender}</span><span class="timestamp">${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span></div><div class="text">${text}</div></div>`;
+                msgDiv.innerHTML = `
+                    <div class="message-avatar"></div>
+                    <div class="message-content">
+                        <div class="header">
+                            <span class="username">${sender}</span>
+                            <span class="timestamp">${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                        </div>
+                        <div class="text">${text}</div>
+                    </div>
+                `;
                 ui.messagesDiv.appendChild(msgDiv);
                 ui.messagesDiv.scrollTop = ui.messagesDiv.scrollHeight;
             };
 
             const sendMessage = () => {
                 const text = ui.messageInput.value.trim();
-                if (text) {
+                if (text && dataConnection?.open) {
                     const msg = { sender: state.username, text };
-                    Object.values(peers).forEach(p => p.conn.send(msg));
-                    addMessageToUI(state.username + ' (You)', text);
-                    ui.messageInput.value = '';
+                    dataConnection.send(msg); addMessageToUI(state.username + ' (You)', text); ui.messageInput.value = '';
                 }
             };
 
             const setupEventListeners = () => {
-                ui.joinBtn.onclick = () => {
-                    const remoteId = ui.remoteIdInput.value.trim();
-                    if (remoteId === peer.id) return updateStatus("You can't connect to your own ID.", 'error');
-                    if (remoteId) {
-                        const conn = peer.connect(remoteId, { metadata: { username: state.username } });
-                        setupDataConnection(conn);
+                ui.saveUsernameBtn.onclick = () => { state.username = ui.usernameInput.value.trim() || 'User'; ls.set('username', state.username); };
+                ui.copyIdBtn.onclick = () => { navigator.clipboard.writeText(ui.myIdInput.value); };
+                ui.renewIdBtn.onclick = () => initializePeer(true);
+                ui.joinBtn.onclick = () => connectToPeer(ui.remoteIdInput.value.trim());
+                ui.stopCallBtn.onclick = () => window.location.reload();
+
+                ui.debugMicBtn.onclick = debugMicrophone;
+
+                ui.shareScreenBtn.onclick = () => {
+                    if (state.isScreenSharing) {
+                        state.isScreenSharing = false;
+                        ui.shareScreenBtn.classList.remove('active');
+                        startMedia().then(() => replaceStream(localStream));
+                    } else {
+                        startScreenShare();
                     }
                 };
 
-                ui.saveUsernameBtn.onclick = () => { state.username = ui.usernameInput.value.trim() || 'User'; ls.set('username', state.username); };
-                ui.copyIdBtn.onclick = () => navigator.clipboard.writeText(ui.myIdInput.value);
-                ui.renewIdBtn.onclick = () => initializePeer(true);
-                ui.stopCallBtn.onclick = () => window.location.reload();
-                ui.shareScreenBtn.onclick = toggleScreenShare;
+                ui.muteBtn.onclick = () => {
+                    state.isMuted = !state.isMuted;
+                    if (localStream && localStream.getAudioTracks()[0]) {
+                        localStream.getAudioTracks()[0].enabled = !state.isMuted;
+                    }
+                    ui.muteBtn.classList.toggle('danger', state.isMuted);
+                    ui.muteBtn.innerHTML = state.isMuted ? '<i class="fa-solid fa-microphone-slash"></i>' : '<i class="fa-solid fa-microphone"></i>';
+                };
 
-                ui.muteBtn.onclick = () => { state.isMuted = !state.isMuted; localStream.getAudioTracks().forEach(t => t.enabled = !state.isMuted); ui.muteBtn.classList.toggle('danger', state.isMuted); ui.muteBtn.innerHTML = state.isMuted ? '<i class="fa-solid fa-microphone-slash"></i>' : '<i class="fa-solid fa-microphone"></i>'; };
-                ui.toggleVideoBtn.onclick = () => { state.isVideoEnabled = !state.isVideoEnabled; localStream.getVideoTracks()[0].enabled = state.isVideoEnabled; ui.toggleVideoBtn.classList.toggle('active', state.isVideoEnabled); };
+                ui.toggleVideoBtn.onclick = () => {
+                    state.isVideoEnabled = !state.isVideoEnabled;
+                    if (localStream && localStream.getVideoTracks()[0]) {
+                        localStream.getVideoTracks()[0].enabled = state.isVideoEnabled;
+                    }
+                    ui.toggleVideoBtn.classList.toggle('active', state.isVideoEnabled);
+                };
 
-                ui.fullscreenBtn.onclick = () => { const isFullscreen = ui.callContainer.classList.toggle('fullscreen-mode'); ui.fullscreenBtn.innerHTML = isFullscreen ? '<i class="fa-solid fa-compress"></i>' : '<i class="fa-solid fa-expand"></i>'; };
+                ui.fullscreenBtn.onclick = () => {
+                    const isFullscreen = ui.callContainer.classList.toggle('fullscreen-mode');
+                    ui.fullscreenBtn.innerHTML = isFullscreen ? '<i class="fa-solid fa-compress"></i>' : '<i class="fa-solid fa-expand"></i>';
+                };
+
                 ui.messageForm.onsubmit = e => { e.preventDefault(); sendMessage(); };
 
                 document.addEventListener('contextmenu', e => {
