@@ -11,7 +11,7 @@
     --error: #f23f42;
     --card-border-radius: 15px;
     --button-border-radius: 15px;
-    --circle-border-radius: 1000px;
+    --circle-border-radius: 100px;
     --transition-fast: all 0.15s ease;
     --transition-medium: all 0.3s ease-in-out;
 }
@@ -208,7 +208,7 @@ button.secondary {
     justify-content: center;
     aspect-ratio: 9 / 16;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-    transition: all 0.2s ease-in-out;
+    transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .info-bar {
@@ -412,18 +412,65 @@ button.secondary {
     background-color: #383a40;
 }
 
+.video-main.focus-mode .video-grid {
+    display: block;
+    position: relative;
+    width: 100%;
+    height: 100%;
+}
+
+.video-main.focus-mode .participant-tile:not(.focused) {
+    opacity: 0;
+    transform: scale(0.5);
+    pointer-events: none;
+}
+
+.video-main.focus-mode .participant-tile.focused {
+    display: flex;
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 10;
+    aspect-ratio: auto;
+    border-radius: 0;
+    opacity: 1;
+    transform: scale(1);
+    pointer-events: auto;
+}
+
+.video-main.focus-mode .participant-tile.pip {
+    display: flex;
+    position: absolute;
+    bottom: calc(1rem + 78px);
+    left: 50%;
+    transform: translateX(-50%) scale(1);
+    width: 25%;
+    max-width: 240px;
+    min-width: 160px;
+    height: auto;
+    aspect-ratio: 16 / 9;
+    z-index: 20;
+    border: 2px solid var(--primary-accent);
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5);
+    opacity: 1;
+    pointer-events: auto;
+}
+
 @media (min-width: 769px) {
     #toggle-chat-btn {
         display: none;
     }
 
     .call-container {
-        flex-direction: row;
+        flex-direction: column;
     }
 
     .video-main {
         flex-grow: 1;
-        height: 100% !important;
+        height: auto;
+        padding-bottom: 90px;
     }
 
     .participant-tile {
@@ -432,17 +479,26 @@ button.secondary {
 
     .main-controls-bar {
         position: absolute;
-        background: linear-gradient(to top, rgba(0, 0, 0, 0.7), transparent);
         width: 100%;
+        bottom: 0;
+        transform: translateX(-50%);
+        padding-bottom: 1rem;
     }
 
     .chat-sidebar {
+        position: relative;
+        transform: none;
         flex-grow: 0;
         flex-shrink: 0;
-        width: 360px;
-        height: 100%;
+        width: 100%;
+        height: 35vh;
+        min-height: 280px;
+        max-height: 400px;
         border-radius: 0;
-        border-left: 1px solid var(--border-color);
+        border-top: 1px solid var(--border-color);
+        display: flex;
+        flex-direction: column;
+        background-color: var(--secondary-bg);
     }
 
     #chat-drag-handle {
@@ -450,15 +506,62 @@ button.secondary {
     }
 
     .chat-sidebar .chat-header {
-        display: block;
-        padding: 1.25rem;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 0.75rem 1.25rem;
         font-weight: 700;
-        color: var(--header-text);
+        font-size: 1rem;
+        color: var(--secondary-text);
         border-bottom: 1px solid var(--border-color);
+        flex-shrink: 0;
+    }
+
+    #pip-container {
+        height: 80px;
+    }
+
+    #pip-container .participant-tile.pip {
+        height: 100%;
+        aspect-ratio: 16/9;
+        border-radius: 8px;
+        box-shadow: none;
+    }
+
+    #pip-container .info-bar {
+        display: none;
     }
 
     #messages {
-        padding: 1.25rem;
+        padding: 0.5rem 1.25rem;
+        scroll-behavior: smooth;
+    }
+
+    .message {
+        padding: 0.75rem 0;
+        transition: background-color 0.15s ease;
+        border-radius: 4px;
+    }
+
+    #message-form {
+        padding: 0 1.25rem 1.25rem;
+        margin-top: auto;
+        background-color: var(--secondary-bg);
+    }
+
+    #message-form .input-wrapper {
+        display: flex;
+        align-items: center;
+        background-color: #383a40;
+        border-radius: 8px;
+    }
+
+    #message-form input {
+        background-color: transparent;
+        border: none;
+        height: 44px;
+        padding-left: 1rem;
+        padding-right: 1rem;
     }
 }
 

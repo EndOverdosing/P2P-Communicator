@@ -24,6 +24,7 @@ document.addEventListener('DOMContentLoaded', () => {
         messageForm: document.getElementById('message-form'),
         messageInput: document.getElementById('message-input'),
         statusDiv: document.getElementById('status'),
+        pipContainer: document.getElementById('pip-container'),
     };
 
     let peer, dataConnection;
@@ -191,13 +192,20 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
         try {
-            const screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
-            const screenVideoTrack = screenStream.getVideoTracks()[0];
+            const screenStream = await navigator.mediaDevices.getDisplayMedia({
+                video: { mediaSource: "screen" },
+                audio: { echoCancellation: true, noiseSuppression: true }
+            });
 
-            const audioTrack = localStream?.getAudioTracks()[0];
+            const screenVideoTrack = screenStream.getVideoTracks()[0];
+            const screenAudioTrack = screenStream.getAudioTracks()[0];
+            const micAudioTrack = localStream?.getAudioTracks()[0];
             const newStream = new MediaStream([screenVideoTrack]);
-            if (audioTrack) {
-                newStream.addTrack(audioTrack.clone());
+
+            if (screenAudioTrack) {
+                newStream.addTrack(screenAudioTrack);
+            } else if (micAudioTrack) {
+                newStream.addTrack(micAudioTrack.clone());
             }
 
             if (localStream) {
@@ -212,6 +220,7 @@ document.addEventListener('DOMContentLoaded', () => {
             screenVideoTrack.onended = () => {
                 state.isScreenSharing = false;
                 ui.shareScreenBtn.classList.remove('active');
+                localStream.getTracks().forEach(track => track.stop());
                 startMedia().then(stream => {
                     localStream = stream;
                     replaceStream(stream);
@@ -416,6 +425,34 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         };
         ui.messageForm.onsubmit = e => { e.preventDefault(); sendMessage(); };
+        ui.videoGrid.addEventListener('click', e => {
+            const tile = e.target.closest('.participant-tile');
+            if (!tile || state.isScreenSharing) return;
+
+            const isAlreadyFocused = tile.classList.contains('focused');
+            const isInFocusMode = ui.videoMain.classList.contains('focus-mode');
+            const myTile = document.querySelector(`[data-peer-id="${peer.id}"]`);
+            const pipTileInContainer = ui.pipContainer.querySelector('.participant-tile');
+
+            document.querySelectorAll('.participant-tile').forEach(t => {
+                t.classList.remove('focused', 'pip');
+            });
+
+            if (pipTileInContainer) {
+                ui.videoGrid.appendChild(pipTileInContainer);
+            }
+
+            if (isInFocusMode && isAlreadyFocused) {
+                ui.videoMain.classList.remove('focus-mode');
+            } else {
+                ui.videoMain.classList.add('focus-mode');
+                tile.classList.add('focused');
+                if (myTile && myTile !== tile) {
+                    myTile.classList.add('pip');
+                    ui.pipContainer.appendChild(myTile);
+                }
+            }
+        });
     };
 
     setupEventListeners();

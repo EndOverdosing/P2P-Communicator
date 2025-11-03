@@ -67,10 +67,15 @@
                 <div id="chat-drag-handle">
                     <div class="pane"></div>
                 </div>
-                <div class="chat-header">Text Chat</div>
+                <div class="chat-header">
+                    <span>Text Chat</span>
+                    <div id="pip-container"></div>
+                </div>
                 <div id="messages"></div>
                 <form id="message-form">
-                    <input type="text" id="message-input" placeholder="Send a message" autocomplete="off" disabled>
+                    <div class="input-wrapper">
+                        <input type="text" id="message-input" placeholder="Send a message" autocomplete="off" disabled>
+                    </div>
                 </form>
             </div>
             <div class="main-controls-bar">
