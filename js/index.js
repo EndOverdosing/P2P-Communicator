@@ -49,11 +49,48 @@ document.addEventListener('DOMContentLoaded', () => {
         updateStatus('Initializing Peer...');
         if (peer) peer.destroy();
         const peerId = forceNew ? null : ls.get('myPeerId', null);
-        peer = new Peer(peerId, { config: { 'iceServers': [{ urls: 'stun:stun.l.google.com:19302' }] } });
-        peer.on('open', id => { ls.set('myPeerId', id); ui.myIdInput.value = id; updateStatus('Ready to connect.', 'success'); });
+        peer = new Peer(peerId, {
+            host: '0.peerjs.com',
+            port: 443,
+            path: '/',
+            secure: true,
+            config: { 'iceServers': [{ urls: 'stun:stun.l.google.com:19302' }] }
+        });
+        peer.on('open', id => {
+            ls.set('myPeerId', id);
+            ui.myIdInput.value = id;
+            updateStatus('Ready to connect.', 'success');
+        });
         peer.on('connection', conn => setupDataConnection(conn, false));
-        peer.on('call', call => { const handle = async () => { if (!localStream) { await startMedia(); } call.answer(localStream); setupMediaConnection(call); }; handle().catch(err => log('Error handling incoming call:', err)); });
-        peer.on('error', err => { updateStatus(`${err.type}: ${err.message}`, 'error'); });
+        peer.on('call', call => {
+            const handle = async () => {
+                if (!localStream) {
+                    await startMedia();
+                }
+                call.answer(localStream);
+                setupMediaConnection(call);
+            };
+            handle().catch(err => log('Error handling incoming call:', err));
+        });
+        peer.on('disconnected', () => {
+            updateStatus('Disconnected. Reconnecting...', 'error');
+            if (!peer.destroyed) {
+                setTimeout(() => peer.reconnect(), 3000);
+            }
+        });
+        peer.on('close', () => {
+            updateStatus('Connection closed.', 'error');
+        });
+        peer.on('error', err => {
+            console.error("PeerJS Error:", err);
+            updateStatus(`Error: ${err.type}`, 'error');
+            if (err.type === 'unavailable-id') {
+                updateStatus('ID is already taken. Renewing ID.', 'error');
+                initializePeer(true);
+            } else if (err.type === 'network') {
+                updateStatus('Network connection to server lost.', 'error');
+            }
+        });
     };
 
     const connectToPeer = (remoteId) => {
@@ -64,6 +101,9 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     const setupDataConnection = (conn, amInitiator = false) => {
+        if (!conn) {
+            return updateStatus("Connection failed. Peer might be offline or ID is invalid.", "error");
+        }
         dataConnection = conn;
         conn.on('open', async () => {
             updateStatus(`Connected!`, 'success');
@@ -82,6 +122,10 @@ document.addEventListener('DOMContentLoaded', () => {
         });
         conn.on('data', data => handleData(data, conn.peer));
         conn.on('close', () => { removeVideoStream(conn.peer); updateStatus("Peer has disconnected.", "error"); });
+        conn.on('error', err => {
+            log('Data connection error:', err);
+            updateStatus(`Connection error: ${err.type}`, 'error');
+        });
     };
 
     const handleData = (data, peerId) => {
@@ -303,17 +347,24 @@ document.addEventListener('DOMContentLoaded', () => {
                     log('Failed to enable video, reverting.', err);
                     state.isVideoEnabled = false;
                 }
-            } else if (localStream) {
-                localStream.getVideoTracks().forEach(t => t.enabled = false);
+            } else {
+                if (localStream) {
+                    localStream.getVideoTracks().forEach(t => t.stop());
+                }
+                const newStream = await startMedia(false);
+                replaceStream(newStream);
             }
 
             ui.toggleVideoBtn.classList.toggle('active', state.isVideoEnabled);
+            ui.toggleVideoBtn.innerHTML = state.isVideoEnabled ? '<i class="fa-solid fa-video"></i>' : '<i class="fa-solid fa-video-slash"></i>'
             updateVideoState(peer.id, state.isVideoEnabled);
             if (dataConnection?.open) dataConnection.send({ type: 'videoState', enabled: state.isVideoEnabled });
         };
         ui.toggleChatBtn.onclick = () => {
-            if (typeof window.toggleMobileChat === 'function') {
+            if (isMobile() && typeof window.toggleMobileChat === 'function') {
                 window.toggleMobileChat();
+            } else {
+                ui.chatSidebar.classList.toggle('visible');
             }
         };
         ui.messageForm.onsubmit = e => { e.preventDefault(); sendMessage(); };
