@@ -605,14 +605,34 @@
                     localStream = null;
                 }
                 try {
-                    localStream = await navigator.mediaDevices.getUserMedia({ video: state.isVideoEnabled, audio: true });
-                    localStream.getAudioTracks()[0].enabled = !state.isMuted;
+                    const constraints = {
+                        video: state.isVideoEnabled ? { width: { ideal: 1280 }, height: { ideal: 720 } } : false,
+                        audio: {
+                            echoCancellation: true,
+                            noiseSuppression: true,
+                            autoGainControl: true
+                        }
+                    };
+                    localStream = await navigator.mediaDevices.getUserMedia(constraints);
+                    if (localStream.getAudioTracks().length > 0) {
+                        localStream.getAudioTracks()[0].enabled = !state.isMuted;
+                    }
                     log('Local stream obtained:', localStream.getTracks().map(t => `${t.kind}: ${t.enabled}`));
                     return localStream;
                 } catch (err) {
                     log('Error getting user media:', err);
-                    updateStatus('Could not access camera/mic.', 'error');
-                    throw err;
+                    updateStatus('Could not access camera/mic. Check permissions.', 'error');
+                    try {
+                        localStream = await navigator.mediaDevices.getUserMedia({ video: false, audio: true });
+                        if (localStream.getAudioTracks().length > 0) {
+                            localStream.getAudioTracks()[0].enabled = !state.isMuted;
+                        }
+                        log('Audio-only stream obtained');
+                        return localStream;
+                    } catch (audioErr) {
+                        log('Audio fallback also failed:', audioErr);
+                        throw audioErr;
+                    }
                 }
             };
 
