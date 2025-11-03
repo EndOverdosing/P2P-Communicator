@@ -517,7 +517,31 @@
         document.addEventListener('DOMContentLoaded', () => {
             const ls = { get: (k, f) => { try { return localStorage.getItem(k) || f; } catch (e) { return f; } }, set: (k, v) => { try { localStorage.setItem(k, v); } catch (e) { } }, getJSON: (k, f) => JSON.parse(ls.get(k, JSON.stringify(f))), setJSON: (k, v) => ls.set(k, JSON.stringify(v)) };
             const ui = {
-                setupSection: document.getElementById('setup-section'), callSection: document.getElementById('call-section'), callContainer: document.getElementById('call-container'), myIdInput: document.getElementById('my-id'), usernameInput: document.getElementById('username-input'), remoteIdInput: document.getElementById('remote-id-input'), saveUsernameBtn: document.getElementById('save-username-btn'), renewIdBtn: document.getElementById('renew-id-btn'), copyIdBtn: document.getElementById('copy-id-btn'), joinBtn: document.getElementById('join-btn'), videoGrid: document.getElementById('video-grid'), muteBtn: document.getElementById('mute-btn'), toggleVideoBtn: document.getElementById('toggle-video-btn'), shareScreenBtn: document.getElementById('share-screen-btn'), debugMicBtn: document.getElementById('debug-mic-btn'), stopCallBtn: document.getElementById('stop-call-btn'), fullscreenBtn: document.getElementById('fullscreen-btn'), roomIdDisplay: document.getElementById('room-id-display'), messagesDiv: document.getElementById('messages'), messageForm: document.getElementById('message-form'), messageInput: document.getElementById('message-input'), statusDiv: document.getElementById('status'), contextMenu: document.getElementById('custom-context-menu'), contextVolumeSlider: document.getElementById('context-volume-slider')
+                setupSection: document.getElementById('setup-section'),
+                callSection: document.getElementById('call-section'),
+                callContainer: document.getElementById('call-container'),
+                heroHeader: document.querySelector('.hero-header'),
+                myIdInput: document.getElementById('my-id'),
+                usernameInput: document.getElementById('username-input'),
+                remoteIdInput: document.getElementById('remote-id-input'),
+                saveUsernameBtn: document.getElementById('save-username-btn'),
+                renewIdBtn: document.getElementById('renew-id-btn'),
+                copyIdBtn: document.getElementById('copy-id-btn'),
+                joinBtn: document.getElementById('join-btn'),
+                videoGrid: document.getElementById('video-grid'),
+                muteBtn: document.getElementById('mute-btn'),
+                toggleVideoBtn: document.getElementById('toggle-video-btn'),
+                shareScreenBtn: document.getElementById('share-screen-btn'),
+                debugMicBtn: document.getElementById('debug-mic-btn'),
+                stopCallBtn: document.getElementById('stop-call-btn'),
+                fullscreenBtn: document.getElementById('fullscreen-btn'),
+                roomIdDisplay: document.getElementById('room-id-display'),
+                messagesDiv: document.getElementById('messages'),
+                messageForm: document.getElementById('message-form'),
+                messageInput: document.getElementById('message-input'),
+                statusDiv: document.getElementById('status'),
+                contextMenu: document.getElementById('custom-context-menu'),
+                contextVolumeSlider: document.getElementById('context-volume-slider')
             };
             let peer, dataConnection;
             let localStream = null;
