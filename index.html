@@ -587,26 +587,55 @@
 
             const initializePeer = (forceNew = false) => {
                 log('Initializing Peer instance...');
+                updateStatus('Initializing Peer...');
                 if (peer) peer.destroy();
                 const peerId = forceNew ? null : ls.get('myPeerId', null);
-                peer = peerId ? new Peer(peerId) : new Peer();
+
+                // *** THIS IS THE FIX ***
+                // We add a configuration with public STUN and TURN servers
+                // This will act as a relay if a direct P2P connection fails
+                const peerConfig = {
+                    config: {
+                        'iceServers': [
+                            { urls: 'stun:stun.l.google.com:19302' },
+                            { urls: 'stun:stun1.l.google.com:19302' },
+                            // The following are public TURN servers. For a real application,
+                            // you would host your own TURN server.
+                            {
+                                urls: "turn:openrelay.metered.ca:80",
+                                username: "openrelayproject",
+                                credential: "openrelayproject",
+                            },
+                            {
+                                urls: "turn:openrelay.metered.ca:443",
+                                username: "openrelayproject",
+                                credential: "openrelayproject",
+                            }
+                        ]
+                    }
+                };
+
+                peer = peerId ? new Peer(peerId, peerConfig) : new Peer(peerConfig);
 
                 peer.on('open', id => {
                     log('PeerJS connection to server established. My ID:', id);
                     ls.set('myPeerId', id);
                     ui.myIdInput.value = id;
-                    updateStatus("Ready to connect.");
+                    updateStatus('Peer active. Ready to connect.', 'success');
                 });
                 peer.on('connection', conn => {
                     log('Incoming data connection request from:', conn.peer);
+                    updateStatus(`Receiving connection from ${conn.peer}...`);
                     setupDataConnection(conn);
                 });
                 peer.on('call', call => {
                     log('Incoming media call request from:', call.peer);
+                    updateStatus(`Incoming call from ${call.peer}...`);
                     handleIncomingCall(call);
                 });
                 peer.on('disconnected', () => {
                     log('Peer disconnected from signaling server. Attempting to reconnect...');
+                    updateStatus('Reconnecting to signaling server...');
                     setTimeout(() => peer.reconnect(), 3000);
                 });
                 peer.on('error', err => {
@@ -621,6 +650,11 @@
 
             const connectToPeer = (remoteId) => {
                 if (!remoteId || !peer) return updateStatus('Please enter a valid peer ID.', 'error');
+                if (remoteId === peer.id) {
+                    log('Self-connection attempt detected. Aborting.');
+                    return updateStatus("You can't connect to your own ID. Please use a different peer's ID.", 'error');
+                }
+
                 log(`Attempting to connect to peer: ${remoteId}`);
                 leaveRoom(false);
                 updateStatus(`Connecting to ${remoteId}...`);
@@ -630,7 +664,7 @@
                 clearTimeout(connectionTimeout);
                 connectionTimeout = setTimeout(() => {
                     log('Connection timed out.');
-                    updateStatus('Connection timed out. Peer may be offline or behind a firewall.', 'error');
+                    updateStatus('Connection timed out. Check network or try again.', 'error');
                     conn.close();
                 }, 15000);
 
@@ -680,8 +714,10 @@
             const handleIncomingCall = (call) => {
                 log('Answering incoming call.');
                 startLocalStream().then(() => {
-                    call.answer(localStream);
-                    setupMediaConnection(call);
+                    if (localStream) {
+                        call.answer(localStream);
+                        setupMediaConnection(call);
+                    }
                 });
             };
 
@@ -698,7 +734,7 @@
                     return localStream;
                 } catch (err) {
                     log('Error getting local stream:', err);
-                    updateStatus('Could not access camera/mic.', 'error');
+                    updateStatus('Could not access camera/mic. Check browser permissions.', 'error');
                 }
             };
 
@@ -733,10 +769,14 @@
                 ui.remoteIdInput.value = '';
                 showCallUI(false);
                 setChatLoading(true);
-                if (wasDisconnected) updateStatus("Peer has disconnected.", "error");
+                if (wasDisconnected) {
+                    updateStatus("Peer has disconnected.", "error");
+                } else {
+                    updateStatus("You have left the room.");
+                }
             };
 
-            const getChatHistoryKey = () => `chatHistory_${peer.id}_${state.currentRoomId}`;
+            const getChatHistoryKey = () => `chatHistory_${peer?.id}_${state.currentRoomId}`;
             const loadChatHistory = () => {
                 ui.messagesDiv.innerHTML = '';
                 const history = ls.getJSON(getChatHistoryKey(), []);
