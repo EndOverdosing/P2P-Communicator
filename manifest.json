@@ -8,12 +8,12 @@
     "description": "Secure, decentralized, real-time communication directly in your browser.",
     "icons": [
         {
-            "src": "favicon.ico",
+            "src": "images/icon.png",
             "type": "image/png",
             "sizes": "192x192"
         },
         {
-            "src": "favicon.ico",
+            "src": "images/icon.png",
             "type": "image/png",
             "sizes": "512x512"
         }
