@@ -529,27 +529,88 @@
             const showCallUI = (show) => { ui.setupSection.classList.toggle('hidden', show); ui.callSection.classList.toggle('hidden', !show); ui.heroHeader.classList.toggle('hidden', show); };
 
             const initializePeer = (forceNew = false) => {
-                log('Initializing Peer...'); updateStatus('Initializing Peer...'); if (peer) peer.destroy(); const peerId = forceNew ? null : ls.get('myPeerId', null);
-                const peerConfig = { config: { 'iceServers': [{ urls: 'stun:stun.l.google.com:19302' }, { urls: "turn:openrelay.metered.ca:80", username: "openrelayproject", credential: "openrelayproject" }] } };
-                peer = peerId ? new Peer(peerId, peerConfig) : new Peer(peerConfig);
-                peer.on('open', id => { log('PeerJS connection to server established. My ID:', id); ls.set('myPeerId', id); ui.myIdInput.value = id; updateStatus('Ready to connect.', 'success'); });
-                peer.on('connection', conn => { log('Incoming data connection from:', conn.peer); setupDataConnection(conn); });
-                peer.on('call', call => {
-                    log('Incoming media call from:', call.peer);
-                    if (!localStream) {
-                        log('No local stream, starting media first...');
-                        startMedia().then(() => {
-                            log('Answering call with local stream');
-                            call.answer(localStream);
-                            setupMediaConnection(call);
-                        });
-                    } else {
-                        log('Answering call with existing local stream');
-                        call.answer(localStream);
-                        setupMediaConnection(call);
+                log('Initializing Peer...');
+                updateStatus('Initializing Peer...');
+                if (peer) peer.destroy();
+                const peerId = forceNew ? null : ls.get('myPeerId', null);
+                const peerConfig = {
+                    config: {
+                        'iceServers': [
+                            { urls: 'stun:stun.l.google.com:19302' },
+                            { urls: "turn:openrelay.metered.ca:80", username: "openrelayproject", credential: "openrelayproject" },
+                            { urls: "turn:openrelay.metered.ca:443", username: "openrelayproject", credential: "openrelayproject" }
+                        ]
                     }
+                };
+                peer = peerId ? new Peer(peerId, peerConfig) : new Peer(peerConfig);
+
+                peer.on('open', id => {
+                    log('PeerJS connection to server established. My ID:', id);
+                    ls.set('myPeerId', id);
+                    ui.myIdInput.value = id;
+                    updateStatus('Ready to connect.', 'success');
                 });
-                peer.on('error', err => { log('PEERJS ERROR:', err); updateStatus(`${err.message}`, 'error'); });
+
+                peer.on('connection', conn => {
+                    log('Incoming data connection from:', conn.peer);
+                    setupDataConnection(conn);
+                });
+
+                peer.on('call', call => {
+                    log('============ INCOMING CALL ============');
+                    log('Incoming media call from:', call.peer);
+                    log('Current localStream exists:', !!localStream);
+
+                    const handleIncomingCall = async () => {
+                        if (!localStream) {
+                            log('Creating local stream to answer call...');
+                            await startMedia();
+                        }
+
+                        log('Answering call with localStream tracks:', localStream.getTracks().map(t => `${t.kind}: ${t.label}`));
+                        call.answer(localStream);
+
+                        call.on('stream', remoteStream => {
+                            log('============ REMOTE STREAM RECEIVED ============');
+                            log('Remote stream from:', call.peer);
+                            log('Remote stream tracks:', remoteStream.getTracks().map(t => `${t.kind}: ${t.label} enabled:${t.enabled}`));
+                            log('Remote stream ID:', remoteStream.id);
+
+                            setTimeout(() => {
+                                const existingTile = document.querySelector(`[data-peer-id="${call.peer}"]`);
+                                if (existingTile) {
+                                    log('Updating existing remote tile');
+                                    const video = existingTile.querySelector('video');
+                                    if (video) {
+                                        video.srcObject = remoteStream;
+                                        video.play().catch(e => log('Error playing remote video:', e));
+                                    }
+                                } else {
+                                    log('Creating NEW remote tile for peer:', call.peer);
+                                    addVideoStream(call.peer, remoteStream, false);
+                                }
+                            }, 100);
+                        });
+
+                        call.on('close', () => {
+                            log('Call closed with:', call.peer);
+                            removeVideoStream(call.peer);
+                        });
+
+                        call.on('error', err => {
+                            log('Call error:', err);
+                        });
+
+                        mediaConnections[call.peer] = call;
+                    };
+
+                    handleIncomingCall().catch(err => log('Error handling incoming call:', err));
+                });
+
+                peer.on('error', err => {
+                    log('PEERJS ERROR:', err);
+                    updateStatus(`${err.message}`, 'error');
+                });
             };
 
             const connectToPeer = (remoteId) => {
@@ -563,14 +624,18 @@
             const setupDataConnection = (conn) => {
                 const isInitiator = !dataConnection;
                 dataConnection = conn;
+                log('============ DATA CONNECTION SETUP ============');
+                log('isInitiator:', isInitiator);
+                log('Peer:', conn.peer);
 
                 conn.on('open', async () => {
-                    log('Data connection established with:', conn.peer);
+                    log('Data connection OPEN with:', conn.peer);
                     updateStatus(`Connected!`, 'success');
                     ui.messageInput.disabled = false;
                     ui.roomIdDisplay.textContent = `Connected to ${conn.peer.slice(0, 6)}...`;
 
                     await startMedia();
+                    log('Local stream ready, tracks:', localStream.getTracks().map(t => `${t.kind}: ${t.label}`));
 
                     if (!document.querySelector(`[data-peer-id="${peer.id}"]`)) {
                         addVideoStream(peer.id, localStream, true);
@@ -578,13 +643,48 @@
 
                     showCallUI(true);
 
-                    await new Promise(resolve => setTimeout(resolve, 500));
-
                     if (isInitiator) {
+                        await new Promise(resolve => setTimeout(resolve, 1000));
+                        log('============ INITIATING CALL ============');
+                        log('Calling peer:', conn.peer);
+                        log('With localStream tracks:', localStream.getTracks().map(t => `${t.kind}: ${t.label}`));
+
                         const call = peer.call(conn.peer, localStream);
-                        setupMediaConnection(call);
+
+                        call.on('stream', remoteStream => {
+                            log('============ REMOTE STREAM RECEIVED (initiator) ============');
+                            log('Remote stream from:', call.peer);
+                            log('Remote stream tracks:', remoteStream.getTracks().map(t => `${t.kind}: ${t.label} enabled:${t.enabled}`));
+
+                            setTimeout(() => {
+                                const existingTile = document.querySelector(`[data-peer-id="${call.peer}"]`);
+                                if (existingTile) {
+                                    log('Updating existing remote tile (initiator)');
+                                    const video = existingTile.querySelector('video');
+                                    if (video) {
+                                        video.srcObject = remoteStream;
+                                        video.play().catch(e => log('Error playing remote video:', e));
+                                    }
+                                } else {
+                                    log('Creating NEW remote tile (initiator) for:', call.peer);
+                                    addVideoStream(call.peer, remoteStream, false);
+                                }
+                            }, 100);
+                        });
+
+                        call.on('close', () => {
+                            log('Call closed (initiator) with:', call.peer);
+                            removeVideoStream(call.peer);
+                        });
+
+                        call.on('error', err => {
+                            log('Call error (initiator):', err);
+                        });
+
+                        mediaConnections[call.peer] = call;
                     }
                 });
+
                 conn.on('data', data => { addMessageToUI(data.sender, data.text); });
                 conn.on('close', () => {
                     log('Peer disconnected:', conn.peer);
@@ -599,8 +699,19 @@
                 log('Setting up media connection with:', peerId);
 
                 call.on('stream', remoteStream => {
-                    log('Received remote stream from:', peerId);
-                    addVideoStream(peerId, remoteStream);
+                    log('Received remote stream from:', peerId, remoteStream.getTracks().map(t => `${t.kind}: ${t.enabled}`));
+
+                    const existingTile = document.querySelector(`[data-peer-id="${peerId}"]`);
+                    if (existingTile) {
+                        log('Updating existing tile for:', peerId);
+                        const video = existingTile.querySelector('video');
+                        if (video) {
+                            video.srcObject = remoteStream;
+                        }
+                    } else {
+                        log('Creating new tile for:', peerId);
+                        addVideoStream(peerId, remoteStream, false);
+                    }
                 });
 
                 call.on('close', () => {
@@ -617,10 +728,6 @@
             };
 
             const startMedia = async () => {
-                if (localStream) {
-                    localStream.getTracks().forEach(track => track.stop());
-                    localStream = null;
-                }
                 try {
                     const constraints = {
                         video: state.isVideoEnabled ? { width: { ideal: 1280 }, height: { ideal: 720 } } : false,
@@ -630,17 +737,23 @@
                             autoGainControl: true
                         }
                     };
-                    localStream = await navigator.mediaDevices.getUserMedia(constraints);
+                    const newStream = await navigator.mediaDevices.getUserMedia(constraints);
+
+                    if (localStream) {
+                        localStream.getTracks().forEach(track => track.stop());
+                    }
+
+                    localStream = newStream;
+
                     if (localStream.getAudioTracks().length > 0) {
                         localStream.getAudioTracks()[0].enabled = !state.isMuted;
                     }
+
                     log('Local stream obtained:', localStream.getTracks().map(t => `${t.kind}: ${t.enabled}`));
 
-                    if (document.querySelector(`[data-peer-id="${peer.id}"]`)) {
-                        const localVideo = document.querySelector(`[data-peer-id="${peer.id}"] video`);
-                        if (localVideo) {
-                            localVideo.srcObject = localStream;
-                        }
+                    const localVideo = document.querySelector(`[data-peer-id="${peer.id}"] video`);
+                    if (localVideo) {
+                        localVideo.srcObject = localStream;
                     }
 
                     return localStream;
@@ -648,10 +761,18 @@
                     log('Error getting user media:', err);
                     updateStatus('Could not access camera/mic. Check permissions.', 'error');
                     try {
-                        localStream = await navigator.mediaDevices.getUserMedia({ video: false, audio: true });
+                        const audioStream = await navigator.mediaDevices.getUserMedia({ video: false, audio: true });
+
+                        if (localStream) {
+                            localStream.getTracks().forEach(track => track.stop());
+                        }
+
+                        localStream = audioStream;
+
                         if (localStream.getAudioTracks().length > 0) {
                             localStream.getAudioTracks()[0].enabled = !state.isMuted;
                         }
+
                         log('Audio-only stream obtained');
                         return localStream;
                     } catch (audioErr) {
@@ -698,6 +819,10 @@
 
                     micAudioTrack.enabled = !state.isMuted;
 
+                    if (localStream) {
+                        localStream.getTracks().forEach(track => track.stop());
+                    }
+
                     const combinedStream = new MediaStream([screenTrack, micAudioTrack]);
                     if (screenAudioTrack) {
                         combinedStream.addTrack(screenAudioTrack);
@@ -712,8 +837,13 @@
                         log('Screen share ended.');
                         state.isScreenSharing = false;
                         ui.shareScreenBtn.classList.remove('active');
-                        startMedia().then(() => replaceStream(localStream));
+                        startMedia().then(stream => {
+                            replaceStream(stream);
+                            updateGridLayout();
+                        });
                     };
+
+                    updateGridLayout();
 
                 } catch (err) {
                     log('Screen share failed:', err);
@@ -733,36 +863,51 @@
                     const pc = call.peerConnection;
                     if (!pc) return;
 
-                    const videoSender = pc.getSenders().find(s => s.track && s.track.kind === 'video');
-                    if (videoSender && newStream.getVideoTracks()[0]) {
-                        videoSender.replaceTrack(newStream.getVideoTracks()[0]).catch(err => log('Error replacing video track:', err));
-                    }
+                    const senders = pc.getSenders();
 
-                    const audioSender = pc.getSenders().find(s => s.track && s.track.kind === 'audio');
-                    if (audioSender && newStream.getAudioTracks()[0]) {
-                        audioSender.replaceTrack(newStream.getAudioTracks()[0]).catch(err => log('Error replacing audio track:', err));
-                    }
+                    const newVideoTrack = newStream.getVideoTracks()[0];
+                    const newAudioTrack = newStream.getAudioTracks()[0];
+
+                    senders.forEach(sender => {
+                        if (sender.track) {
+                            if (sender.track.kind === 'video' && newVideoTrack) {
+                                sender.replaceTrack(newVideoTrack).catch(err => log('Error replacing video track:', err));
+                            } else if (sender.track.kind === 'audio' && newAudioTrack) {
+                                sender.replaceTrack(newAudioTrack).catch(err => log('Error replacing audio track:', err));
+                            }
+                        }
+                    });
                 });
             };
 
             const addVideoStream = (id, stream, isLocal = false) => {
-                if (document.querySelector(`[data-peer-id="${id}"]`)) {
-                    log('Video tile already exists for:', id);
+                const existing = document.querySelector(`[data-peer-id="${id}"]`);
+                if (existing) {
+                    log('Video tile already exists for:', id, '- updating stream');
+                    const video = existing.querySelector('video');
+                    if (video) {
+                        video.srcObject = stream;
+                    }
                     return;
                 }
-                log('Adding video stream for:', id, 'isLocal:', isLocal);
+
+                log('Adding video stream for:', id, 'isLocal:', isLocal, 'tracks:', stream.getTracks().map(t => `${t.kind}: ${t.enabled}`));
+
                 const tile = document.createElement('div');
                 tile.className = 'participant-tile';
                 tile.dataset.peerId = id;
+
                 const video = document.createElement('video');
                 video.srcObject = stream;
                 video.autoplay = true;
                 video.playsInline = true;
-                if (isLocal) video.muted = true;
+                if (isLocal) {
+                    video.muted = true;
+                }
 
                 const infoBar = document.createElement('div');
                 infoBar.className = 'info-bar';
-                infoBar.textContent = isLocal ? state.username + ' (You)' : id.slice(0, 6);
+                infoBar.textContent = isLocal ? state.username + ' (You)' : 'Peer ' + id.slice(0, 6);
 
                 tile.append(video, infoBar);
                 ui.videoGrid.append(tile);
