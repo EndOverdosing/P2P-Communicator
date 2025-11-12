@@ -1,3 +1,6 @@
+<!DOCTYPE html>
+<html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -13,87 +16,166 @@
     <title>Peer 2 Peer</title>
     <link rel="icon" href="/images/icon.png">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.1.1/css/all.min.css" rel="stylesheet">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/styling/index.css">
-    <link rel="manifest" href="/manifest.json">
-    <script src="https://unpkg.com/peerjs@1.5.5/dist/peerjs.min.js"></script>
-    <script src="/js/index.js" defer></script>
 </head>
 
 <body>
-    <div class="main-content-wrapper" id="main-content-wrapper">
-        <header class="hero-header">
-            <h1>Peer 2 Peer</h1>
-            <p class="subtitle">Secure, decentralized, real-time communication.</p>
-        </header>
-        <section id="setup-section">
-            <div class="setup-container">
-                <div class="card">
-                    <h2>Your Identity</h2>
-                    <label for="username-input">Display Name</label>
+    <div id="app-loader">
+        <div class="spinner"></div>
+    </div>
+
+    <div id="auth-container" class="hidden">
+        <div class="auth-card">
+            <h1 class="auth-title">Peer 2 Peer</h1>
+            <p class="auth-subtitle">Secure, real-time communication.</p>
+            <div id="auth-forms">
+                <form id="login-form">
+                    <h2>Welcome Back</h2>
                     <div class="input-group">
-                        <input type="text" id="username-input" placeholder="Enter your name...">
-                        <button id="save-username-btn" title="Save Name" class="secondary"
-                            aria-label="Save Display Name"><i class="fa-solid fa-check"></i></button>
+                        <label for="login-username">Username</label>
+                        <input type="text" id="login-username" required autocomplete="username">
                     </div>
-                    <label for="my-id">Your Unique ID</label>
                     <div class="input-group">
-                        <input type="text" id="my-id" readonly>
-                        <button id="copy-id-btn" title="Copy ID" class="secondary" aria-label="Copy Your ID"><i
-                                class="fa-solid fa-copy"></i></button>
-                        <button id="renew-id-btn" title="Generate New ID" class="secondary"
-                            aria-label="Generate New ID"><i class="fa-solid fa-arrows-rotate"></i></button>
+                        <label for="login-password">Password</label>
+                        <input type="password" id="login-password" required autocomplete="current-password">
                     </div>
+                    <button type="submit">Login</button>
+                    <p class="auth-switch">Don't have an account? <a href="#" id="show-signup">Sign Up</a></p>
+                </form>
+
+                <form id="signup-form" class="hidden">
+                    <h2>Create Account</h2>
+                    <div class="input-group">
+                        <label for="signup-username">Username</label>
+                        <input type="text" id="signup-username" required autocomplete="username">
+                    </div>
+                    <div class="input-group">
+                        <label for="signup-password">Password</label>
+                        <input type="password" id="signup-password" required autocomplete="new-password">
+                    </div>
+                    <button type="submit">Sign Up</button>
+                    <p class="auth-switch">Already have an account? <a href="#" id="show-login">Login</a></p>
+                </form>
+            </div>
+            <p id="auth-status" class="status-message"></p>
+        </div>
+    </div>
+
+    <div id="main-app" class="hidden">
+        <aside id="sidebar">
+            <div class="sidebar-header">
+                <div class="user-profile">
+                    <div id="user-avatar" class="avatar"></div>
+                    <span id="username-display"></span>
                 </div>
-                <div class="card">
-                    <h2>Connect to a Peer</h2>
-                    <label for="remote-id-input">Peer's Unique ID</label>
-                    <div class="input-group">
-                        <input type="text" id="remote-id-input" placeholder="Paste peer's ID here...">
+                <button id="logout-btn" title="Logout"><i class="fa-solid fa-right-from-bracket"></i></button>
+            </div>
+            <div class="sidebar-actions">
+                <button id="add-friend-btn"><i class="fa-solid fa-user-plus"></i> Add Friend</button>
+            </div>
+            <nav id="friends-list"></nav>
+        </aside>
+
+        <main id="chat-container">
+            <div id="welcome-screen">
+                <i class="fa-solid fa-comments"></i>
+                <h2>Select a friend to start chatting</h2>
+                <p>Your conversations are secure and private.</p>
+            </div>
+            <div id="chat-view" class="hidden">
+                <header id="chat-header">
+                    <button id="back-to-friends-btn" class="mobile-only"><i class="fa-solid fa-arrow-left"></i></button>
+                    <div class="friend-info">
+                        <div class="avatar-wrapper">
+                            <div id="chat-avatar" class="avatar"></div>
+                            <div id="chat-friend-status" class="status-indicator"></div>
+                        </div>
+                        <span id="chat-friend-name"></span>
                     </div>
-                    <button id="join-btn">Connect</button>
+                    <div class="chat-actions">
+                        <button id="call-btn"><i class="fa-solid fa-video"></i></button>
+                    </div>
+                </header>
+                <div id="messages-container"></div>
+                <form id="message-form">
+                    <div class="message-input-wrapper">
+                        <textarea id="message-input" placeholder="Type a message..." autocomplete="off"
+                            rows="1"></textarea>
+                        <button type="submit" title="Send Message"><i class="fa-solid fa-paper-plane"></i></button>
+                    </div>
+                </form>
+            </div>
+        </main>
+    </div>
+
+    <div id="modal-container" class="hidden">
+        <div id="modal-content">
+            <button id="close-modal-btn" class="close-btn">&times;</button>
+            <div id="add-friend-modal" class="hidden">
+                <h2>Add Friend</h2>
+                <p>Enter your friend's exact username.</p>
+                <form id="add-friend-form">
+                    <input type="text" id="friend-username-input" placeholder="Username...">
+                    <button type="submit">Send Request</button>
+                </form>
+                <div id="friend-search-results"></div>
+            </div>
+            <div id="incoming-call-modal" class="hidden">
+                <div class="caller-info">
+                    <div id="caller-avatar" class="avatar"></div>
+                    <h3 id="caller-name"></h3>
+                    <p>is calling you...</p>
+                </div>
+                <div class="call-actions">
+                    <button id="decline-call-btn" class="danger"><i class="fa-solid fa-phone-slash"></i></button>
+                    <button id="accept-call-btn" class="success"><i class="fa-solid fa-phone"></i></button>
                 </div>
             </div>
-            <p id="status">Initializing...</p>
-        </section>
+            <div id="confirmation-modal" class="hidden">
+                <h2 id="confirmation-title">Are you sure?</h2>
+                <p id="confirmation-message"></p>
+                <div class="confirmation-actions">
+                    <button id="cancel-btn" class="secondary">Cancel</button>
+                    <button id="confirm-btn" class="danger">Confirm</button>
+                </div>
+            </div>
+            <div id="info-modal" class="hidden">
+                <h2 id="info-title">Notification</h2>
+                <p id="info-message"></p>
+                <div class="info-actions">
+                    <button id="info-ok-btn">OK</button>
+                </div>
+            </div>
+        </div>
     </div>
 
     <section id="call-section" class="hidden">
         <div id="call-container" class="call-container">
-            <div id="video-main" class="video-main">
-                <div id="video-grid" class="video-grid"></div>
-            </div>
-            <div id="chat-sidebar" class="chat-sidebar">
-                <div id="chat-drag-handle">
-                    <div class="pane"></div>
+            <div id="chat-overlay-backdrop" class="hidden"></div>
+            <div id="chat-overlay" class="hidden">
+                <div id="chat-overlay-header">
+                    <div class="drag-handle"></div>
                 </div>
-                <div class="chat-header">
-                    <span>Text Chat</span>
-                    <div id="pip-container"></div>
+                <div id="chat-overlay-content">
                 </div>
-                <div id="messages"></div>
-                <form id="message-form">
-                    <div class="input-wrapper">
-                        <input type="text" id="message-input" placeholder="Send a message" autocomplete="off" disabled>
-                    </div>
-                </form>
             </div>
+            <div id="video-grid"></div>
             <div class="main-controls-bar">
-                <div class="call-actions">
-                    <button id="mute-btn" title="Mute/Unmute" aria-label="Mute or Unmute Audio"><i
-                            class="fa-solid fa-microphone"></i></button>
-                    <button id="toggle-video-btn" title="Disable/Enable Camera" class="active"
-                        aria-label="Toggle Camera"><i class="fa-solid fa-video"></i></button>
-                    <button id="share-screen-btn" title="Share Screen" aria-label="Share Screen"><i
-                            class="fa-solid fa-display"></i></button>
-                    <button id="toggle-chat-btn" title="Toggle Chat" aria-label="Toggle Chat"><i
-                            class="fa-solid fa-comment"></i></button>
-                    <button id="stop-call-btn" title="Leave Call" class="danger" aria-label="Leave Call"><i
-                            class="fa-solid fa-phone"></i></button>
-                </div>
+                <button id="mute-btn" title="Mute/Unmute"><i class="fa-solid fa-microphone"></i></button>
+                <button id="toggle-video-btn" title="Toggle Camera" class="active"><i
+                        class="fa-solid fa-video"></i></button>
+                <button id="share-screen-btn" title="Share Screen"><i class="fa-solid fa-display"></i></button>
+                <button id="toggle-chat-btn" title="Toggle Chat"><i class="fa-solid fa-comment"></i></button>
+                <button id="stop-call-btn" title="Leave Call" class="danger"><i class="fa-solid fa-phone"></i></button>
             </div>
         </div>
     </section>
+
+    <audio id="incoming-call-audio" src="/audios/calling.mp3" loop preload="auto"></audio>
+
+    <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+    <script src="https://unpkg.com/peerjs@1.5.5/dist/peerjs.min.js"></script>
+    <script type="module" src="/js/index.js"></script>
 </body>
 
 </html>
