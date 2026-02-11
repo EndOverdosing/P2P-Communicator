@@ -384,7 +384,6 @@ document.addEventListener('DOMContentLoaded', () => {
         subscriptions.push(channel);
     };
 
-    const subscribeToMessages function
 const subscribeToMessages = () => {
     const channel = supabase
         .channel('messages-changes')
