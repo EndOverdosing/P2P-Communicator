@@ -305,6 +305,29 @@ document.addEventListener('DOMContentLoaded', () => {
 
         await updateConversationsList();
     };
+    
+    const addFileButton = () => {
+    const fileBtn = document.createElement('button');
+    fileBtn.type = 'button';
+    fileBtn.className = 'attach-file-btn';
+    fileBtn.innerHTML = '<i class="fa-solid fa-paperclip"></i>';
+    fileBtn.title = 'Attach File';
+    fileBtn.style.cssText = `
+        background: none;
+        color: var(--secondary-text);
+        font-size: 1.2rem;
+        width: 40px;
+        height: 40px;
+        padding: 0;
+        margin-right: 0.5rem;
+    `;
+    fileBtn.onclick = () => ui.fileInput.click();
+    
+    const messageWrapper = document.querySelector('.message-input-wrapper');
+    if (messageWrapper && !messageWrapper.querySelector('.attach-file-btn')) {
+        messageWrapper.insertBefore(fileBtn, messageWrapper.firstChild);
+    }
+};
 
     const loadFriendRequests = async () => {
         const { data: incoming } = await supabase
@@ -361,27 +384,36 @@ document.addEventListener('DOMContentLoaded', () => {
         subscriptions.push(channel);
     };
 
-    const subscribeToMessages = () => {
-        const channel = supabase
-            .channel('messages-changes')
-            .on('postgres_changes', {
-                event: '*',
-                schema: 'public',
-                table: 'messages',
-                filter: `receiver_id=eq.${currentUser.id}`
-            }, async (payload) => {
-                if (payload.eventType === 'INSERT') {
-                    await handleNewMessage(payload.new);
-                } else if (payload.eventType === 'UPDATE') {
-                    updateMessageInUI(payload.new);
-                } else if (payload.eventType === 'DELETE') {
-                    removeMessageFromUI(payload.old.id);
-                }
-            })
-            .subscribe();
+    const subscribeToMessages function
+const subscribeToMessages = () => {
+    const channel = supabase
+        .channel('messages-changes')
+        .on('postgres_changes', {
+            event: 'INSERT',
+            schema: 'public',
+            table: 'messages',
+            filter: `receiver_id=eq.${currentUser.id}`
+        }, async (payload) => {
+            await handleNewMessage(payload.new);
+        })
+        .on('postgres_changes', {
+            event: 'UPDATE',
+            schema: 'public',
+            table: 'messages'
+        }, (payload) => {
+            updateMessageInUI(payload.new);
+        })
+        .on('postgres_changes', {
+            event: 'DELETE',
+            schema: 'public',
+            table: 'messages'
+        }, (payload) => {
+            removeMessageFromUI(payload.old.id);
+        })
+        .subscribe();
 
-        subscriptions.push(channel);
-    };
+    subscriptions.push(channel);
+};
 
     const subscribeToFriendRequests = () => {
         const channel = supabase
@@ -490,28 +522,31 @@ document.addEventListener('DOMContentLoaded', () => {
         subscriptions.push(channel);
     };
 
-    const handleNewMessage = async (message) => {
-        if (blockedUsers.has(message.sender_id)) return;
+const handleNewMessage = async (message) => {
+    if (blockedUsers.has(message.sender_id)) return;
+    
+    if (document.querySelector(`[data-message-id="${message.id}"]`)) return;
 
-        const { data: sender } = await supabase.from('profiles').select('*').eq('id', message.sender_id).single();
-        if (!sender) return;
+    const { data: sender } = await supabase.from('profiles').select('*').eq('id', message.sender_id).single();
+    if (!sender) return;
 
-        await updateConversationsList();
+    await updateConversationsList();
 
-        if (currentChatType === 'friend' && currentChatFriend?.id === message.sender_id) {
-            displayMessage(message, sender);
-            if (userSettings.readReceipts) {
-                await supabase.from('messages').update({ read: true }).eq('id', message.id);
-            }
-        } else {
-            if (userSettings.notifications) {
-                showNotification(`New message from ${sender.username}`);
-            }
-            if (userSettings.messageSound) {
-                playMessageSound();
-            }
+    if (currentChatType === 'friend' && currentChatFriend?.id === message.sender_id) {
+        displayMessage(message, sender);
+        if (userSettings.readReceipts) {
+            await supabase.from('messages').update({ read: true }).eq('id', message.id);
         }
-    };
+        scrollToBottom();
+    } else {
+        if (userSettings.notifications) {
+            showNotification(`New message from ${sender.username}`);
+        }
+        if (userSettings.messageSound) {
+            playMessageSound();
+        }
+    }
+};
 
     const handleNewGroupMessage = async (message) => {
         const { data: sender } = await supabase.from('profiles').select('*').eq('id', message.sender_id).single();
@@ -791,82 +826,110 @@ document.addEventListener('DOMContentLoaded', () => {
         scrollToBottom();
     };
 
-    const displayMessage = (message, sender) => {
-        const messageDiv = document.createElement('div');
-        messageDiv.className = `message ${message.sender_id === currentUser.id ? 'sent' : 'received'}`;
-        messageDiv.dataset.messageId = message.id;
+const displayMessage = (message, sender) => {
+    if (document.querySelector(`[data-message-id="${message.id}"]`)) return;
+    
+    const messageDiv = document.createElement('div');
+    messageDiv.className = `message ${message.sender_id === currentUser.id ? 'sent' : 'received'}`;
+    messageDiv.dataset.messageId = message.id;
 
-        const isMobile = window.innerWidth <= 768;
-        const swipeContainer = document.createElement('div');
-        swipeContainer.className = 'message-swipe-container';
+    const isMobile = window.innerWidth <= 768;
+    const isSent = message.sender_id === currentUser.id;
 
-        let content = '';
+    let content = '';
 
-        if (message.reply_to_id) {
-            const replyText = message.reply_to_content || 'Original message';
-            content += `<div class="message-reply-context"><i class="fa-solid fa-reply"></i> ${replyText.substring(0, 50)}${replyText.length > 50 ? '...' : ''}</div>`;
-        }
+    if (message.reply_to_id) {
+        const replyText = message.reply_to_content || 'Original message';
+        content += `<div class="message-reply-context" style="background: rgba(88, 101, 242, 0.1); padding: 0.5rem; border-left: 3px solid var(--primary-accent); margin-bottom: 0.5rem; border-radius: 4px; font-size: 0.85rem;"><i class="fa-solid fa-reply"></i> ${escapeHtml(replyText.substring(0, 50))}${replyText.length > 50 ? '...' : ''}</div>`;
+    }
 
-        if (message.file_url) {
-            const fileType = message.file_type || 'file';
-            if (fileType.startsWith('image/')) {
-                content += `<img src="${message.file_url}" alt="Image" class="message-image" onclick="window.open('${message.file_url}', '_blank')">`;
-            } else if (fileType.startsWith('audio/')) {
-                content += `<audio controls src="${message.file_url}" class="message-audio"></audio>`;
-            } else {
-                content += `<a href="${message.file_url}" target="_blank" class="message-file"><i class="fa-solid fa-file"></i> ${message.file_name || 'File'}</a>`;
-            }
-        }
-
-        if (message.content) {
-            content += `<div class="message-content">${escapeHtml(message.content)}${message.edited ? '<span class="message-edited">(edited)</span>' : ''}</div>`;
-        }
-
-        if (message.call_duration !== null && message.call_duration !== undefined) {
-            const caller = message.sender_id === currentUser.id ? 'You' : sender.username;
-            const duration = formatCallDuration(message.call_duration);
-            content = `<div class="message-call-info"><i class="fa-solid fa-phone"></i> ${caller} called • ${duration}</div>`;
-        }
-
-        content += `<div class="message-reactions" data-message-id="${message.id}"></div>`;
-
-        const timestamp = new Date(message.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-        
-        if (isMobile) {
-            swipeContainer.innerHTML = `
-                <div class="message-timestamp-reveal">${timestamp}</div>
-                ${content}
-            `;
-            messageDiv.appendChild(swipeContainer);
+    if (message.file_url) {
+        const fileType = message.file_type || 'file';
+        if (fileType.startsWith('image/')) {
+            content += `<img src="${message.file_url}" alt="Image" class="message-image" onclick="window.open('${message.file_url}', '_blank')" style="max-width: 300px; border-radius: var(--button-border-radius); cursor: pointer; display: block;">`;
+        } else if (fileType.startsWith('audio/')) {
+            content += `<audio controls src="${message.file_url}" class="message-audio" style="max-width: 100%;"></audio>`;
         } else {
-            swipeContainer.innerHTML = content;
-            messageDiv.appendChild(swipeContainer);
-            const timestampDiv = document.createElement('div');
-            timestampDiv.className = 'message-timestamp';
-            timestampDiv.textContent = timestamp;
-            messageDiv.appendChild(timestampDiv);
+            content += `<a href="${message.file_url}" target="_blank" class="message-file" style="display: inline-flex; align-items: center; gap: 0.5rem; padding: 0.5rem; background: var(--tertiary-bg); border-radius: var(--button-border-radius); text-decoration: none; color: var(--primary-text);"><i class="fa-solid fa-file"></i> ${message.file_name || 'File'}</a>`;
         }
+    }
 
-        if (message.sender_id === currentUser.id) {
-            messageDiv.addEventListener('contextmenu', (e) => showMessageContextMenu(e, message));
-        }
+    if (message.content) {
+        content += `<div class="message-content">${escapeHtml(message.content)}${message.edited ? '<span class="message-edited" style="font-size: 0.75rem; color: var(--secondary-text); margin-left: 0.5rem;">(edited)</span>' : ''}</div>`;
+    }
 
+    if (message.call_duration !== null && message.call_duration !== undefined) {
+        const caller = message.sender_id === currentUser.id ? 'You' : sender.username;
+        const duration = formatCallDuration(message.call_duration);
+        content = `<div class="message-call-info" style="display: flex; align-items: center; gap: 0.5rem;"><i class="fa-solid fa-phone"></i> ${caller} called â¢ ${duration}</div>`;
+    }
+
+    content += `<div class="message-reactions" data-message-id="${message.id}" style="display: flex; flex-wrap: wrap; gap: 0.25rem; margin-top: 0.25rem;"></div>`;
+
+    const timestamp = new Date(message.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    
+    if (isMobile) {
+        const timestampDiv = document.createElement('div');
+        timestampDiv.className = 'message-timestamp-reveal';
+        timestampDiv.textContent = timestamp;
+        timestampDiv.style.cssText = `
+            position: absolute;
+            top: 50%;
+            transform: translateY(-50%);
+            font-size: 0.75rem;
+            color: var(--secondary-text);
+            opacity: 0;
+            transition: opacity 0.2s ease;
+            pointer-events: none;
+            ${isSent ? 'right: 100%; padding-right: 0.5rem;' : 'left: 100%; padding-left: 0.5rem;'}
+        `;
+        
+        const contentWrapper = document.createElement('div');
+        contentWrapper.innerHTML = content;
+        contentWrapper.style.cssText = 'position: relative;';
+        
+        messageDiv.appendChild(timestampDiv);
+        messageDiv.appendChild(contentWrapper);
+        
+        setupMessageSwipe(contentWrapper, isSent);
+    } else {
+        const contentWrapper = document.createElement('div');
+        contentWrapper.innerHTML = content;
+        messageDiv.appendChild(contentWrapper);
+        
+        const timestampDiv = document.createElement('div');
+        timestampDiv.className = 'message-timestamp';
+        timestampDiv.textContent = timestamp;
+        timestampDiv.style.cssText = `
+            font-size: 0.7rem;
+            color: var(--secondary-text);
+            margin-top: 0.25rem;
+            text-align: ${isSent ? 'right' : 'left'};
+        `;
+        messageDiv.appendChild(timestampDiv);
+    }
+
+    if (message.sender_id === currentUser.id) {
+        messageDiv.addEventListener('contextmenu', (e) => showMessageContextMenu(e, message));
         messageDiv.addEventListener('click', (e) => {
-            if (e.target.classList.contains('message-reaction')) {
-                toggleReaction(message.id, e.target.dataset.emoji);
+            if (e.target.closest('.message-content') && !e.target.closest('.message-reaction')) {
+                showMessageContextMenu(e, message);
             }
         });
+    }
 
-        if (isMobile) {
-            setupMessageSwipe(swipeContainer, message.sender_id === currentUser.id);
+    messageDiv.addEventListener('click', (e) => {
+        if (e.target.classList.contains('message-reaction')) {
+            toggleReaction(message.id, e.target.dataset.emoji);
         }
+    });
 
-        ui.messagesContainer.appendChild(messageDiv);
+    ui.messagesContainer.appendChild(messageDiv);
 
-        if (message.reactions) {
-            renderReactions(message.id, message.reactions);
-        }
-    };
+    if (message.reactions) {
+        renderReactions(message.id, message.reactions);
+    }
+};
 
     const displayGroupMessage = (message, sender) => {
         const messageDiv = document.createElement('div');
@@ -957,66 +1020,140 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
-    const setupMessageSwipe = (element, isSent) => {
-        let startX = 0;
-        let currentX = 0;
-        let isDragging = false;
+const setupMessageSwipe = (element, isSent) => {
+    let startX = 0;
+    let currentX = 0;
+    let isDragging = false;
 
-        element.addEventListener('touchstart', (e) => {
-            startX = e.touches[0].clientX;
-            isDragging = true;
-        });
+    element.addEventListener('touchstart', (e) => {
+        startX = e.touches[0].clientX;
+        isDragging = true;
+    });
 
-        element.addEventListener('touchmove', (e) => {
-            if (!isDragging) return;
-            currentX = e.touches[0].clientX;
-            const diff = currentX - startX;
-            
-            const maxSwipe = 80;
-            const swipeAmount = isSent ? Math.min(Math.max(diff, -maxSwipe), 0) : Math.max(Math.min(diff, maxSwipe), 0);
-            
-            element.style.transform = `translateX(${swipeAmount}px)`;
-            
-            const timestamp = element.querySelector('.message-timestamp-reveal');
-            if (timestamp) {
-                timestamp.style.opacity = Math.abs(swipeAmount) / maxSwipe;
-            }
-        });
-
-        element.addEventListener('touchend', () => {
-            isDragging = false;
-            element.style.transform = 'translateX(0)';
-            
-            const timestamp = element.querySelector('.message-timestamp-reveal');
-            if (timestamp) {
-                timestamp.style.opacity = 0;
-            }
-        });
-    };
-
-    const showMessageContextMenu = (e, message) => {
-        e.preventDefault();
+    element.addEventListener('touchmove', (e) => {
+        if (!isDragging) return;
+        currentX = e.touches[0].clientX;
+        const diff = currentX - startX;
         
-        const menu = document.createElement('div');
-        menu.className = 'context-menu';
-        menu.style.position = 'fixed';
-        menu.style.left = `${e.clientX}px`;
-        menu.style.top = `${e.clientY}px`;
-        menu.innerHTML = `
-            <div class="context-menu-item" onclick="window.replyToMessage('${message.id}', '${escapeHtml(message.content || 'File')}')"><i class="fa-solid fa-reply"></i> Reply</div>
-            <div class="context-menu-item" onclick="window.editMessage('${message.id}', '${escapeHtml(message.content)}')"><i class="fa-solid fa-edit"></i> Edit</div>
-            <div class="context-menu-item" onclick="window.addReaction('${message.id}')"><i class="fa-solid fa-face-smile"></i> React</div>
-            <div class="context-menu-item" onclick="window.deleteMessage('${message.id}')"><i class="fa-solid fa-trash"></i> Delete</div>
+        const maxSwipe = 80;
+
+        const swipeAmount = isSent ? Math.min(Math.max(diff, -maxSwipe), 0) : Math.max(Math.min(diff, maxSwipe), 0);
+        
+        element.style.transform = `translateX(${swipeAmount}px)`;
+        
+        const timestamp = element.parentElement.querySelector('.message-timestamp-reveal');
+        if (timestamp) {
+            timestamp.style.opacity = Math.abs(swipeAmount) / maxSwipe;
+        }
+    });
+
+    element.addEventListener('touchend', () => {
+        isDragging = false;
+        element.style.transform = 'translateX(0)';
+        
+        const timestamp = element.parentElement.querySelector('.message-timestamp-reveal');
+        if (timestamp) {
+            timestamp.style.opacity = 0;
+        }
+    });
+};
+
+const showMessageContextMenu = (e, message) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    const existingMenu = document.querySelector('.context-menu');
+    if (existingMenu) existingMenu.remove();
+    
+    const menu = document.createElement('div');
+    menu.className = 'context-menu';
+    menu.style.cssText = `
+        position: fixed;
+        left: ${e.clientX}px;
+        top: ${e.clientY}px;
+        background: var(--secondary-bg);
+        border: 1px solid var(--border-color);
+        border-radius: var(--card-border-radius);
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+        z-index: 10001;
+        min-width: 150px;
+        padding: 0.5rem 0;
+    `;
+    
+    const items = [
+        { icon: 'fa-reply', text: 'Reply', action: () => window.replyToMessage(message.id, message.content || 'File') },
+        { icon: 'fa-face-smile', text: 'React', action: () => window.addReaction(message.id) }
+    ];
+    
+    if (message.content && message.sender_id === currentUser.id) {
+        items.push({ icon: 'fa-edit', text: 'Edit', action: () => window.editMessage(message.id, message.content) });
+    }
+    
+    if (message.sender_id === currentUser.id) {
+        items.push({ icon: 'fa-trash', text: 'Delete', action: () => window.deleteMessage(message.id), danger: true });
+    }
+    
+    items.forEach(item => {
+        const menuItem = document.createElement('div');
+        menuItem.className = 'context-menu-item';
+        menuItem.innerHTML = `<i class="fa-solid ${item.icon}"></i> ${item.text}`;
+        menuItem.style.cssText = `
+            padding: 0.75rem 1rem;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            transition: var(--transition-fast);
+            ${item.danger ? 'color: var(--error);' : ''}
         `;
+        menuItem.onmouseover = () => menuItem.style.background = 'var(--tertiary-bg)';
+        menuItem.onmouseout = () => menuItem.style.background = 'transparent';
+        menuItem.onclick = () => {
+            item.action();
+            menu.remove();
+        };
+        menu.appendChild(menuItem);
+    });
 
-        document.body.appendChild(menu);
+    document.body.appendChild(menu);
 
-        const closeMenu = () => {
+    const closeMenu = (e) => {
+        if (!menu.contains(e.target)) {
             menu.remove();
             document.removeEventListener('click', closeMenu);
-        };
-        setTimeout(() => document.addEventListener('click', closeMenu), 10);
+        }
     };
+    setTimeout(() => document.addEventListener('click', closeMenu), 10);
+};
+
+if (ui.fileInput) {
+    ui.fileInput.addEventListener('change', async (e) => {
+        const files = Array.from(e.target.files);
+        if (files.length === 0) return;
+
+        pendingFiles = files;
+        
+        ui.filePreviewContent.innerHTML = '';
+        files.forEach(file => {
+            const filePreview = document.createElement('div');
+            filePreview.style.cssText = 'margin-bottom: 1rem;';
+            
+            if (file.type.startsWith('image/')) {
+                const img = document.createElement('img');
+                img.src = URL.createObjectURL(file);
+                img.style.cssText = 'max-width: 100%; max-height: 300px; border-radius: var(--button-border-radius);';
+                filePreview.appendChild(img);
+            } else {
+                filePreview.innerHTML = `<div style="padding: 1rem; background: var(--tertiary-bg); border-radius: var(--button-border-radius); display: flex; align-items: center; gap: 0.5rem;"><i class="fa-solid fa-file"></i> ${file.name}</div>`;
+            }
+            
+            ui.filePreviewContent.appendChild(filePreview);
+        });
+
+        showModal(ui.filePreviewModal);
+        e.target.value = '';
+    });
+}
 
     const showGroupMessageContextMenu = (e, message) => {
         e.preventDefault();
@@ -1100,19 +1237,135 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
-    window.addReaction = async (messageId) => {
-        const emoji = prompt('Enter emoji reaction:');
-        if (emoji) {
+window.addReaction = async (messageId) => {
+    const emojis = ['ð', 'â¤ï¸', 'ð', 'ð®', 'ð¢', 'ð', 'ð', 'ð¥'];
+    
+    const picker = document.createElement('div');
+    picker.className = 'emoji-picker';
+    picker.style.cssText = `
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        background: var(--secondary-bg);
+        padding: 1rem;
+        border-radius: var(--card-border-radius);
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+        z-index: 10000;
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 0.5rem;
+    `;
+    
+    emojis.forEach(emoji => {
+        const btn = document.createElement('button');
+        btn.textContent = emoji;
+        btn.style.cssText = `
+            font-size: 2rem;
+            padding: 0.5rem;
+            background: none;
+            border: none;
+            cursor: pointer;
+            border-radius: var(--button-border-radius);
+            transition: var(--transition-fast);
+        `;
+        btn.onmouseover = () => btn.style.background = 'var(--tertiary-bg)';
+        btn.onmouseout = () => btn.style.background = 'none';
+        btn.onclick = async () => {
             await toggleReaction(messageId, emoji);
+            document.body.removeChild(backdrop);
+        };
+        picker.appendChild(btn);
+    });
+    
+    const backdrop = document.createElement('div');
+    backdrop.style.cssText = `
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.5);
+        z-index: 9999;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    `;
+    backdrop.onclick = (e) => {
+        if (e.target === backdrop) {
+            document.body.removeChild(backdrop);
         }
     };
+    
+    backdrop.appendChild(picker);
+    document.body.appendChild(backdrop);
+};
 
-    window.addGroupReaction = async (messageId) => {
-        const emoji = prompt('Enter emoji reaction:');
-        if (emoji) {
+    window.addGroupReaction
+window.addGroupReaction = async (messageId) => {
+    const emojis = ['ð', 'â¤ï¸', 'ð', 'ð®', 'ð¢', 'ð', 'ð', 'ð¥'];
+    
+    const picker = document.createElement('div');
+    picker.className = 'emoji-picker';
+    picker.style.cssText = `
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        background: var(--secondary-bg);
+        padding: 1rem;
+        border-radius: var(--card-border-radius);
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+        z-index: 10000;
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 0.5rem;
+    `;
+    
+    emojis.forEach(emoji => {
+        const btn = document.createElement('button');
+        btn.textContent = emoji;
+        btn.style.cssText = `
+            font-size: 2rem;
+            padding: 0.5rem;
+            background: none;
+            border: none;
+            cursor: pointer;
+            border-radius: var(--button-border-radius);
+            transition: var(--transition-fast);
+        `;
+        btn.onmouseover = () => btn.style.background = 'var(--tertiary-bg)';
+        btn.onmouseout = () => btn.style.background = 'none';
+        btn.onclick = async () => {
             await toggleGroupReaction(messageId, emoji);
+            document.body.removeChild(backdrop);
+        };
+        picker.appendChild(btn);
+    });
+    
+    const backdrop = document.createElement('div');
+    backdrop.style.cssText = `
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.5);
+        z-index: 9999;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    `;
+    backdrop.onclick = (e) => {
+        if (e.target === backdrop) {
+            document.body.removeChild(backdrop);
         }
     };
+    
+    backdrop.appendChild(picker);
+    document.body.appendChild(backdrop);
+};
+
 
     const toggleReaction = async (messageId, emoji) => {
         const { data: message } = await supabase.from('messages').select('reactions').eq('id', messageId).single();
@@ -1393,22 +1646,22 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     const renderGroupMemberSelection = () => {
-        let html = '';
-        for (const friendId in friends) {
-            const friend = friends[friendId];
-            const isSelected = selectedGroupMembers.has(friendId);
-            html += `
-                <div class="group-member-item ${isSelected ? 'selected' : ''}" onclick="window.toggleGroupMember('${friendId}')">
-                    <div class="group-member-checkbox">
-                        <i class="fa-solid fa-check"></i>
-                    </div>
-                    <div class="avatar">${friend.avatar_url ? `<img src="${friend.avatar_url}" alt="${friend.username}">` : friend.username[0].toUpperCase()}</div>
-                    <div class="group-member-name">${friend.username}</div>
+    let html = '<div class="list-header" style="margin-bottom: 1rem;">Select Members</div>';
+    for (const friendId in friends) {
+        const friend = friends[friendId];
+        const isSelected = selectedGroupMembers.has(friendId);
+        html += `
+            <div class="group-member-item ${isSelected ? 'selected' : ''}" onclick="window.toggleGroupMember('${friendId}')" style="display: flex; align-items: center; gap: 0.75rem; padding: 0.75rem; border-radius: var(--button-border-radius); cursor: pointer; margin-bottom: 0.5rem; background: var(--tertiary-bg);">
+                <div class="group-member-checkbox" style="width: 20px; height: 20px; border-radius: 50%; border: 2px solid var(--border-color); display: flex; align-items: center; justify-content: center; flex-shrink: 0; ${isSelected ? 'background-color: var(--primary-accent); border-color: var(--primary-accent);' : ''}">
+                    <i class="fa-solid fa-check" style="color: white; font-size: 0.7rem; ${isSelected ? 'opacity: 1;' : 'opacity: 0;'}"></i>
                 </div>
-            `;
-        }
-        ui.groupMembersList.innerHTML = html;
-    };
+                <div class="avatar" style="width: 36px; height: 36px; flex-shrink: 0;">${friend.avatar_url ? `<img src="${friend.avatar_url}" alt="${friend.username}">` : friend.username[0].toUpperCase()}</div>
+                <div class="group-member-name" style="flex: 1; font-weight: 500;">${friend.username}</div>
+            </div>
+        `;
+    }
+    ui.groupMembersList.innerHTML = html;
+};
 
     window.toggleGroupMember = (friendId) => {
         if (selectedGroupMembers.has(friendId)) {
@@ -2068,4 +2321,5 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     handleAuth();
+setTimeout(addFileButton, 500);
 });
