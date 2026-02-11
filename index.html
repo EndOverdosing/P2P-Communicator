@@ -112,8 +112,16 @@
                 <div id="typing-indicator" class="hidden">
                     <span>Typing...</span>
                 </div>
+                <div id="reply-preview" class="hidden">
+                    <div class="reply-preview-content">
+                        <span class="reply-preview-text"></span>
+                    </div>
+                    <button id="cancel-reply-btn"><i class="fa-solid fa-xmark"></i></button>
+                </div>
                 <form id="message-form">
                     <div class="message-input-wrapper">
+                        <input type="file" id="file-input" accept="image/*,audio/*,.pdf,.doc,.docx,.txt" multiple class="hidden">
+                        <button type="button" id="attach-file-btn" title="Attach File"><i class="fa-solid fa-paperclip"></i></button>
                         <textarea id="message-input" placeholder="Type a message..." autocomplete="off"
                             rows="1"></textarea>
                         <button type="submit" title="Send Message"><i class="fa-solid fa-paper-plane"></i></button>
@@ -138,7 +146,7 @@
                 <h2>Create Group</h2>
                 <p>Choose a name and select members for your group.</p>
                 <form id="create-group-form">
-                    <input type="text" id="group-name-input" placeholder="Group name..." autocomplete="off">
+                    <input type="text" id="group-name-input" placeholder="Group name..." autocomplete="off" required>
                     <div id="group-members-list"></div>
                     <button type="submit">Create Group</button>
                 </form>
@@ -176,10 +184,6 @@
                     <button class="option-btn" id="view-profile-btn">
                         <i class="fa-solid fa-user"></i>
                         <span>View Profile</span>
-                    </button>
-                    <button class="option-btn" id="mute-conversation-btn">
-                        <i class="fa-solid fa-bell-slash"></i>
-                        <span>Mute Conversation</span>
                     </button>
                     <button class="option-btn" id="block-user-btn">
                         <i class="fa-solid fa-ban"></i>
@@ -223,6 +227,38 @@
                         required>
                     <button type="submit">Update Username</button>
                 </form>
+            </div>
+            <div id="friend-requests-modal" class="hidden">
+                <h2>Friend Requests</h2>
+                <div id="pending-requests-list"></div>
+            </div>
+            <div id="edit-group-modal" class="hidden">
+                <h2>Edit Group</h2>
+                <form id="edit-group-form">
+                    <div class="input-group">
+                        <label for="edit-group-name-input">Group Name</label>
+                        <input type="text" id="edit-group-name-input" placeholder="Group name..." autocomplete="off" required>
+                    </div>
+                    <div class="input-group">
+                        <label>Group Avatar</label>
+                        <input type="file" id="edit-group-avatar-input" accept="image/*" class="hidden">
+                        <button type="button" id="change-group-avatar-btn" class="secondary-btn">Change Avatar</button>
+                    </div>
+                    <button type="submit">Save Changes</button>
+                </form>
+            </div>
+            <div id="message-reactions-modal" class="hidden">
+                <h2>Add Reaction</h2>
+                <div class="emoji-picker">
+                    <button class="emoji-btn" data-emoji="👍">👍</button>
+                    <button class="emoji-btn" data-emoji="❤️">❤️</button>
+                    <button class="emoji-btn" data-emoji="😂">😂</button>
+                    <button class="emoji-btn" data-emoji="😮">😮</button>
+                    <button class="emoji-btn" data-emoji="😢">😢</button>
+                    <button class="emoji-btn" data-emoji="🙏">🙏</button>
+                    <button class="emoji-btn" data-emoji="👏">👏</button>
+                    <button class="emoji-btn" data-emoji="🔥">🔥</button>
+                </div>
             </div>
         </div>
     </div>
@@ -275,23 +311,6 @@
                                 <span class="toggle-label">Dark Mode</span>
                             </label>
                         </div>
-                        <div class="setting-item">
-                            <label for="font-size-select">Font Size</label>
-                            <select id="font-size-select">
-                                <option value="small">Small</option>
-                                <option value="medium" selected>Medium</option>
-                                <option value="large">Large</option>
-                            </select>
-                        </div>
-                        <div class="setting-item">
-                            <label for="chat-bg-select">Chat Background</label>
-                            <select id="chat-bg-select">
-                                <option value="default">Default</option>
-                                <option value="gradient1">Gradient 1</option>
-                                <option value="gradient2">Gradient 2</option>
-                                <option value="pattern">Pattern</option>
-                            </select>
-                        </div>
                     </div>
                     <div class="settings-section">
                         <h3>Notifications</h3>
@@ -326,6 +345,10 @@
                                 <span class="toggle-label">Read Receipts</span>
                             </label>
                         </div>
+                    </div>
+                    <div class="settings-section">
+                        <h3>Friend Requests</h3>
+                        <button id="view-friend-requests-btn" class="secondary-btn">View Pending Requests</button>
                     </div>
                 </div>
             </div>
