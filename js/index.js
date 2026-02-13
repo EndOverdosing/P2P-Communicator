@@ -2823,6 +2823,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (type === 'local') {
             video.muted = true;
+        } else {
+            video.muted = false;
+            stream.getAudioTracks().forEach(track => {
+                track.enabled = true;
+            });
+            stream.getVideoTracks().forEach(track => {
+                track.enabled = true;
+            });
         }
 
         console.log(`Video element created for ${type}:`, video);
