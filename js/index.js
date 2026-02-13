@@ -2865,12 +2865,22 @@ document.addEventListener('DOMContentLoaded', () => {
             const isVideoOff = track.muted || !track.enabled || track.readyState !== 'live';
 
             console.log(`updateVideoState for ${type}: muted=${track.muted}, enabled=${track.enabled}, readyState=${track.readyState}, isVideoOff=${isVideoOff}`);
+            console.log(`Current tile classes BEFORE update:`, tile.className);
+            console.log(`Tile in DOM:`, document.body.contains(tile));
+            console.log(`Video element:`, video);
+            console.log(`Video srcObject:`, video.srcObject);
+            console.log(`Video paused:`, video.paused);
+            console.log(`Video readyState:`, video.readyState);
 
             if (isVideoOff) {
                 tile.classList.add('video-off');
             } else {
                 tile.classList.remove('video-off');
             }
+
+            console.log(`Current tile classes AFTER update:`, tile.className);
+            console.log(`Video display style:`, window.getComputedStyle(video).display);
+            console.log(`Placeholder display style:`, window.getComputedStyle(placeholder).display);
         };
 
         const videoTracks = stream.getVideoTracks();
