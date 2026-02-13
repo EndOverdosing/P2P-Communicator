@@ -1863,6 +1863,28 @@ select option {
     display: none;
 }
 
+.participant-tile.fullscreen {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 99999;
+    width: 100vw;
+    height: 100vh;
+    border-radius: 0;
+    aspect-ratio: unset;
+    min-height: unset;
+}
+
+.participant-tile.fullscreen video {
+    object-fit: contain;
+}
+
+.participant-tile.fullscreen .participant-name {
+    bottom: 5rem;
+}
+
 .main-controls-bar {
     display: flex;
     justify-content: center;

@@ -2476,6 +2476,11 @@ document.addEventListener('DOMContentLoaded', () => {
         ui.incomingCallAudio.currentTime = 0;
 
         try {
+            localStream = await navigator.mediaDevices.getUserMedia({
+                video: { width: { ideal: 1280 }, height: { ideal: 720 } },
+                audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }
+            });
+
             const callChannel = supabase.channel(`call-invite-${currentUser.id}`);
             await callChannel.subscribe();
 
@@ -2497,7 +2502,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 }, 10000);
 
                 const checkCall = setInterval(() => {
-                    console.log('Checking for mediaConnection...', mediaConnection);
                     if (mediaConnection) {
                         clearInterval(checkCall);
                         clearTimeout(timeout);
@@ -2509,13 +2513,14 @@ document.addEventListener('DOMContentLoaded', () => {
             await waitForCall;
             console.log('✅ mediaConnection received:', mediaConnection);
 
-            localStream = await navigator.mediaDevices.getUserMedia({
-                video: { width: { ideal: 1280 }, height: { ideal: 720 } },
-                audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }
-            });
+            ui.callSection.classList.remove('hidden');
+            ui.chatView.classList.add('hidden');
+            ui.videoGrid.innerHTML = '';
+
+            addVideoStream('local', localStream, currentUser);
 
             mediaConnection.on('error', (err) => {
-                console.error('Media connection error before answer:', err);
+                console.error('Media connection error:', err);
                 endCall();
                 showInfoModal('Call Error', 'Failed to establish call connection.');
             });
@@ -2523,10 +2528,7 @@ document.addEventListener('DOMContentLoaded', () => {
             mediaConnection.answer(localStream);
 
             mediaConnection.on('stream', (remoteStream) => {
-                ui.callSection.classList.remove('hidden');
-                ui.chatView.classList.add('hidden');
-                ui.videoGrid.innerHTML = '';
-                addVideoStream('local', localStream, currentUser);
+                console.log('📺 Remote stream received:', remoteStream);
                 addVideoStream('remote', remoteStream, friends[incomingCallData.from]);
             });
 
@@ -2823,33 +2825,54 @@ document.addEventListener('DOMContentLoaded', () => {
         isInCall = true;
     };
 
-    const addVideoStream = (id, stream, user) => {
-        const existingTile = document.getElementById(`video-${id}`);
-        if (existingTile) existingTile.remove();
+    const addVideoStream = (type, stream, user) => {
+        const existingTile = document.getElementById(`${type}-video`);
+        if (existingTile) {
+            existingTile.remove();
+        }
 
         const tile = document.createElement('div');
         tile.className = 'participant-tile';
-        tile.id = `video-${id}`;
+        tile.id = `${type}-video`;
 
         const video = document.createElement('video');
         video.srcObject = stream;
         video.autoplay = true;
         video.playsInline = true;
-        if (id === 'local') video.muted = true;
+
+        if (type === 'local') {
+            video.muted = true;
+        }
 
         const placeholder = document.createElement('div');
         placeholder.className = 'video-off-placeholder';
         placeholder.innerHTML = `
-        <div class="avatar">${user.avatar_url ? `<img src="${user.avatar_url}" alt="${user.username}">` : user.username[0].toUpperCase()}</div>
+        <div class="avatar large-avatar">${user.username[0].toUpperCase()}</div>
         <span>${user.username}</span>
     `;
 
+        const nameTag = document.createElement('div');
+        nameTag.className = 'participant-name';
+        nameTag.textContent = user.username;
+
         tile.appendChild(video);
         tile.appendChild(placeholder);
+        tile.appendChild(nameTag);
+
+        tile.addEventListener('click', () => {
+            tile.classList.toggle('fullscreen');
+        });
+
         ui.videoGrid.appendChild(tile);
 
-        const hasVideo = stream.getVideoTracks().length > 0 && stream.getVideoTracks()[0].enabled;
-        tile.classList.toggle('video-off', !hasVideo);
+        stream.getVideoTracks().forEach(track => {
+            track.onended = () => {
+                tile.classList.add('video-off');
+            };
+            if (!track.enabled) {
+                tile.classList.add('video-off');
+            }
+        });
     };
 
     const updateVideoState = (id, enabled) => {
