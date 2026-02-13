@@ -2679,8 +2679,30 @@ document.addEventListener('DOMContentLoaded', () => {
     const initiateCallConnection = async (calleeId, calleePeerId) => {
         try {
             localStream = await navigator.mediaDevices.getUserMedia({
-                video: { width: { ideal: 1280 }, height: { ideal: 720 } },
-                audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }
+                video: {
+                    width: { ideal: 1280 },
+                    height: { ideal: 720 },
+                    facingMode: 'user'
+                },
+                audio: {
+                    echoCancellation: true,
+                    noiseSuppression: true,
+                    autoGainControl: true
+                }
+            });
+
+            console.log('📹 Local stream obtained (initiateCall):', {
+                id: localStream.id,
+                active: localStream.active,
+                videoTracks: localStream.getVideoTracks().map(t => ({
+                    label: t.label,
+                    enabled: t.enabled,
+                    settings: t.getSettings()
+                })),
+                audioTracks: localStream.getAudioTracks().map(t => ({
+                    label: t.label,
+                    enabled: t.enabled
+                }))
             });
 
             const call = peer.call(calleePeerId, localStream, {
@@ -2809,36 +2831,137 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     const addVideoStream = (type, stream, user) => {
-        console.log(`🎬 addVideoStream called - type: ${type}, user:`, user);
+        console.log('═══════════════════════════════════════════════════════');
+        console.log(`🎬 addVideoStream CALLED`);
+        console.log(`   Type: ${type}`);
+        console.log(`   User:`, user);
+        console.log(`   Stream ID:`, stream.id);
+        console.log(`   Stream active:`, stream.active);
+
+        const videoTracks = stream.getVideoTracks();
+        const audioTracks = stream.getAudioTracks();
+        console.log(`   Video tracks (${videoTracks.length}):`, videoTracks.map(t => ({
+            id: t.id,
+            label: t.label,
+            enabled: t.enabled,
+            muted: t.muted,
+            readyState: t.readyState,
+            settings: t.getSettings()
+        })));
+        console.log(`   Audio tracks (${audioTracks.length}):`, audioTracks.map(t => ({
+            id: t.id,
+            enabled: t.enabled,
+            muted: t.muted,
+            readyState: t.readyState
+        })));
+        console.log('═══════════════════════════════════════════════════════');
 
         const existingTile = document.getElementById(`${type}-video`);
         if (existingTile) {
-            console.log(`Removing existing ${type} tile`);
+            console.log(`🗑️ Removing existing ${type} tile`);
             existingTile.remove();
         }
 
         const tile = document.createElement('div');
         tile.className = 'participant-tile';
         tile.id = `${type}-video`;
+        tile.dataset.type = type;
+        tile.dataset.streamId = stream.id;
 
         const video = document.createElement('video');
+
         video.srcObject = stream;
+
         video.autoplay = true;
         video.playsInline = true;
         video.setAttribute('playsinline', '');
-        video.style.width = '100%';
-        video.style.height = '100%';
-        video.style.objectFit = 'cover';
+        video.setAttribute('webkit-playsinline', '');
+        video.setAttribute('x5-playsinline', '');
 
         if (type === 'local') {
             video.muted = true;
+            video.setAttribute('muted', '');
         } else {
             video.muted = false;
         }
 
-        video.play().catch(err => {
-            console.error(`Error playing ${type} video:`, err);
+        video.style.cssText = `
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        display: block;
+        background: #000;
+        -webkit-transform: translateZ(0);
+        transform: translateZ(0);
+    `;
+
+        console.log(`📹 Video element created for ${type}:`, {
+            autoplay: video.autoplay,
+            playsInline: video.playsInline,
+            muted: video.muted,
+            srcObject: !!video.srcObject,
+            readyState: video.readyState
         });
+
+        video.addEventListener('loadedmetadata', () => {
+            console.log(`✅ ${type} video metadata loaded:`, {
+                videoWidth: video.videoWidth,
+                videoHeight: video.videoHeight,
+                duration: video.duration,
+                readyState: video.readyState
+            });
+        });
+
+        video.addEventListener('loadeddata', () => {
+            console.log(`✅ ${type} video data loaded`);
+        });
+
+        video.addEventListener('canplay', () => {
+            console.log(`✅ ${type} video can play`);
+        });
+
+        video.addEventListener('playing', () => {
+            console.log(`▶️ ${type} video is playing`);
+        });
+
+        video.addEventListener('pause', () => {
+            console.log(`⏸️ ${type} video paused`);
+        });
+
+        video.addEventListener('error', (e) => {
+            console.error(`❌ ${type} video error:`, e);
+            console.error('Video error details:', {
+                error: video.error,
+                code: video.error?.code,
+                message: video.error?.message,
+                networkState: video.networkState,
+                readyState: video.readyState
+            });
+        });
+
+        const playPromise = video.play();
+        if (playPromise !== undefined) {
+            playPromise
+                .then(() => {
+                    console.log(`✅ ${type} video play() succeeded immediately`);
+                })
+                .catch(err => {
+                    console.error(`❌ ${type} video play() failed:`, err);
+                    console.error('Play error details:', {
+                        name: err.name,
+                        message: err.message,
+                        videoReadyState: video.readyState,
+                        videoPaused: video.paused,
+                        videoMuted: video.muted
+                    });
+
+                    if (!video.muted && type === 'remote') {
+                        console.log(`🔄 Retrying ${type} play with muted=true`);
+                        video.muted = true;
+                        video.play().catch(e => console.error('Retry failed:', e));
+                    }
+                });
+        }
 
         const placeholder = document.createElement('div');
         placeholder.className = 'video-off-placeholder';
@@ -2851,9 +2974,27 @@ document.addEventListener('DOMContentLoaded', () => {
         nameTag.className = 'participant-name';
         nameTag.textContent = user.username;
 
+        const debugOverlay = document.createElement('div');
+        debugOverlay.className = 'video-debug-overlay';
+        debugOverlay.style.cssText = `
+        position: absolute;
+        top: 0;
+        right: 0;
+        background: rgba(0, 0, 0, 0.7);
+        color: #0f0;
+        padding: 0.5rem;
+        font-size: 0.7rem;
+        font-family: monospace;
+        z-index: 1000;
+        max-width: 200px;
+        word-wrap: break-word;
+    `;
+        updateDebugOverlay();
+
         tile.appendChild(video);
         tile.appendChild(placeholder);
         tile.appendChild(nameTag);
+        tile.appendChild(debugOverlay);
 
         tile.addEventListener('click', () => {
             tile.classList.toggle('fullscreen');
@@ -2861,10 +3002,35 @@ document.addEventListener('DOMContentLoaded', () => {
 
         ui.videoGrid.appendChild(tile);
 
+        console.log(`📍 Tile appended to grid. Grid children count:`, ui.videoGrid.children.length);
+
+        function updateDebugOverlay() {
+            const videoTracks = stream.getVideoTracks();
+            const vt = videoTracks[0];
+
+            debugOverlay.innerHTML = `
+            <div>${type.toUpperCase()}</div>
+            <div>Stream: ${stream.active ? '🟢' : '🔴'}</div>
+            <div>Tracks: ${videoTracks.length}</div>
+            ${vt ? `
+            <div>Enabled: ${vt.enabled ? '✓' : '✗'}</div>
+            <div>Muted: ${vt.muted ? '✓' : '✗'}</div>
+            <div>Ready: ${vt.readyState}</div>
+            <div>Video: ${video.videoWidth}x${video.videoHeight}</div>
+            <div>Playing: ${!video.paused ? '✓' : '✗'}</div>
+            ` : '<div>No video track</div>'}
+        `;
+        }
+
+        setInterval(updateDebugOverlay, 1000);
+
         const updateVideoState = () => {
             const videoTracks = stream.getVideoTracks();
+
+            console.log(`🔄 updateVideoState called for ${type}`);
+
             if (videoTracks.length === 0) {
-                console.log(`No video tracks for ${type}`);
+                console.log(`⚠️ No video tracks for ${type}`);
                 tile.classList.add('video-off');
                 return;
             }
@@ -2872,44 +3038,76 @@ document.addEventListener('DOMContentLoaded', () => {
             const track = videoTracks[0];
             const isVideoOff = track.muted || !track.enabled || track.readyState !== 'live';
 
-            console.log(`updateVideoState for ${type}: muted=${track.muted}, enabled=${track.enabled}, readyState=${track.readyState}, isVideoOff=${isVideoOff}`);
+            console.log(`📊 Video state for ${type}:`, {
+                muted: track.muted,
+                enabled: track.enabled,
+                readyState: track.readyState,
+                isVideoOff: isVideoOff,
+                settings: track.getSettings()
+            });
 
             if (isVideoOff) {
+                console.log(`❌ Video OFF for ${type}`);
                 tile.classList.add('video-off');
             } else {
+                console.log(`✅ Video ON for ${type}`);
                 tile.classList.remove('video-off');
-                video.play().catch(err => {
-                    console.error(`Error playing ${type} video after unmute:`, err);
-                });
+                const playAttempt = video.play();
+                if (playAttempt !== undefined) {
+                    playAttempt.catch(err => {
+                        console.error(`❌ Error playing ${type} video after state update:`, err);
+                    });
+                }
             }
+
+            updateDebugOverlay();
         };
 
-        const videoTracks = stream.getVideoTracks();
         if (videoTracks.length > 0) {
             const track = videoTracks[0];
 
             updateVideoState();
 
-            track.onmute = () => {
-                console.log(`Video track muted for ${type}`);
+            track.addEventListener('mute', () => {
+                console.log(`🔇 Video track muted for ${type}`);
                 updateVideoState();
-            };
+            });
 
-            track.onunmute = () => {
-                console.log(`Video track unmuted for ${type}`);
+            track.addEventListener('unmute', () => {
+                console.log(`🔊 Video track unmuted for ${type}`);
                 updateVideoState();
-            };
+            });
 
-            track.onended = () => {
-                console.log(`Video track ended for ${type}`);
+            track.addEventListener('ended', () => {
+                console.log(`🛑 Video track ended for ${type}`);
                 updateVideoState();
-            };
+            });
 
-            stream.onremovetrack = () => {
-                console.log(`Track removed from stream for ${type}`);
+            stream.addEventListener('removetrack', (e) => {
+                console.log(`🗑️ Track removed from stream for ${type}:`, e.track);
                 updateVideoState();
-            };
+            });
+
+            stream.addEventListener('addtrack', (e) => {
+                console.log(`➕ Track added to stream for ${type}:`, e.track);
+                updateVideoState();
+            });
         }
+
+        setTimeout(() => {
+            console.log(`🔍 Final state check for ${type} (after 1s):`, {
+                tileInDOM: document.contains(tile),
+                videoInDOM: document.contains(video),
+                videoReadyState: video.readyState,
+                videoPaused: video.paused,
+                videoMuted: video.muted,
+                videoSrcObject: !!video.srcObject,
+                streamActive: stream.active,
+                videoWidth: video.videoWidth,
+                videoHeight: video.videoHeight,
+                computedStyle: window.getComputedStyle(video).display
+            });
+        }, 1000);
     };
 
     const updateVideoState = (id, enabled) => {
