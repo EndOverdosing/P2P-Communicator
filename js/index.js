@@ -306,12 +306,18 @@ document.addEventListener('DOMContentLoaded', () => {
 
         } catch (error) {
             console.error('Media access error:', error);
+            const isHTTP = window.location.protocol === 'http:' && window.location.hostname !== 'localhost';
+
             if (error.name === 'NotAllowedError') {
-                showInfoModal('Permission Denied', 'Camera and microphone access was denied. Please allow access in your browser settings and try again.');
+                if (isHTTP) {
+                    showInfoModal('HTTPS Required', 'Video calling requires HTTPS. Please access this site via HTTPS or use localhost. For development, you can use ngrok or enable chrome://flags/#unsafely-treat-insecure-origin-as-secure');
+                } else {
+                    showInfoModal('Permission Denied', 'Camera and microphone access was denied. Please allow access in your browser settings and try again.');
+                }
             } else if (error.name === 'NotFoundError') {
                 showInfoModal('Device Not Found', 'No camera or microphone found. Please connect a device and try again.');
             } else {
-                showInfoModal('Error', 'Could not access camera/microphone. Please check your permissions and try again.');
+                showInfoModal('Error', isHTTP ? 'Cannot access camera/microphone over HTTP. Please use HTTPS or localhost.' : 'Could not access camera/microphone. Please check your permissions and try again.');
             }
         }
     };
@@ -391,11 +397,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
         peer.on('call', (call) => {
-            console.log('📞 PEER CALL EVENT TRIGGERED');
-            console.log('Call object:', call);
-            console.log('Call metadata:', call.metadata);
             mediaConnection = call;
-            console.log('mediaConnection set to:', mediaConnection);
             handleIncomingCall(call);
         });
 
@@ -2380,37 +2382,24 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     const handleIncomingCall = (call) => {
-        console.log('🎯 handleIncomingCall called');
-        console.log('Received call:', call);
-        console.log('Current mediaConnection before assignment:', mediaConnection);
-        console.log('isInCall:', isInCall);
-        console.log('Call from:', call.metadata?.from);
-        console.log('Current incomingCallData?.from:', incomingCallData?.from);
-
         if (isInCall && call.metadata?.from !== incomingCallData?.from) {
-            console.log('⚠️ Already in a call with someone else, ignoring new incoming call');
             call.close();
             return;
         }
 
         if (isInCall && call.metadata?.from === incomingCallData?.from) {
-            console.log('✅ Call from same person we are accepting, updating mediaConnection');
             mediaConnection = call;
             return;
         }
 
         mediaConnection = call;
-        console.log('mediaConnection after assignment:', mediaConnection);
 
         incomingCallData = call.metadata;
-        console.log('incomingCallData:', incomingCallData);
 
         const callerId = incomingCallData.from;
         const caller = friends[callerId];
-        console.log('Caller:', caller);
 
         if (!caller) {
-            console.log('❌ Caller not found in friends list, closing call');
             call.close();
             return;
         }
@@ -2421,12 +2410,10 @@ document.addEventListener('DOMContentLoaded', () => {
             ui.callerAvatar.innerHTML = `<img src="${caller.avatar_url}" alt="${caller.username}">`;
         }
 
-        console.log('✅ Showing incoming call modal');
         showModal(ui.incomingCallModal);
         ui.incomingCallAudio.play().catch(err => console.error('Error playing call sound:', err));
 
         call.on('close', () => {
-            console.log('📴 Call close event triggered');
             if (isInCall) {
                 endCall();
                 showInfoModal('Call Ended', 'The call has ended.');
@@ -2443,10 +2430,6 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     ui.acceptCallBtn.onclick = async () => {
-        console.log('🟢 ACCEPT BUTTON CLICKED');
-        console.log('mediaConnection state:', mediaConnection);
-        console.log('incomingCallData:', incomingCallData);
-
         isInCall = true;
 
         hideModal();
@@ -2467,8 +2450,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             });
 
-            console.log('✅ Sent call_accepted event, waiting for PeerJS call...');
-
             const waitForCall = new Promise((resolve, reject) => {
                 const timeout = setTimeout(() => {
                     reject(new Error('Timed out waiting for call connection'));
@@ -2484,7 +2465,6 @@ document.addEventListener('DOMContentLoaded', () => {
             });
 
             await waitForCall;
-            console.log('✅ mediaConnection received:', mediaConnection);
 
             localStream = await navigator.mediaDevices.getUserMedia({
                 video: { width: { ideal: 1280 }, height: { ideal: 720 } },
@@ -2505,13 +2485,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
             mediaConnection.on('stream', (remoteStream) => {
                 if (remoteStreamReceived) {
-                    console.log('📺 Remote stream already added, ignoring duplicate');
                     return;
                 }
                 remoteStreamReceived = true;
 
-                console.log('📺 Remote stream received:', remoteStream);
-                console.log('Remote stream tracks:', remoteStream.getTracks());
                 addVideoStream('remote', remoteStream, friends[incomingCallData.from]);
             });
 
@@ -2519,7 +2496,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 endCall();
             });
 
-            console.log('📞 Answering call with local stream');
             mediaConnection.answer(localStream);
 
             addVideoStream('local', localStream, currentUser);
@@ -2619,6 +2595,12 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
+        const isHTTP = window.location.protocol === 'http:' && window.location.hostname !== 'localhost';
+        if (isHTTP) {
+            showInfoModal('HTTPS Required', 'Video calling requires HTTPS. Please access this site via HTTPS or use localhost.');
+            return;
+        }
+
         showOutgoingCallUI(currentChatFriend.username);
 
         activeCallInvite = {
@@ -2689,20 +2671,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     noiseSuppression: true,
                     autoGainControl: true
                 }
-            });
-
-            console.log('📹 Local stream obtained (initiateCall):', {
-                id: localStream.id,
-                active: localStream.active,
-                videoTracks: localStream.getVideoTracks().map(t => ({
-                    label: t.label,
-                    enabled: t.enabled,
-                    settings: t.getSettings()
-                })),
-                audioTracks: localStream.getAudioTracks().map(t => ({
-                    label: t.label,
-                    enabled: t.enabled
-                }))
             });
 
             const call = peer.call(calleePeerId, localStream, {
@@ -2831,34 +2799,11 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     const addVideoStream = (type, stream, user) => {
-        console.log('═══════════════════════════════════════════════════════');
-        console.log(`🎬 addVideoStream CALLED`);
-        console.log(`   Type: ${type}`);
-        console.log(`   User:`, user);
-        console.log(`   Stream ID:`, stream.id);
-        console.log(`   Stream active:`, stream.active);
-
         const videoTracks = stream.getVideoTracks();
         const audioTracks = stream.getAudioTracks();
-        console.log(`   Video tracks (${videoTracks.length}):`, videoTracks.map(t => ({
-            id: t.id,
-            label: t.label,
-            enabled: t.enabled,
-            muted: t.muted,
-            readyState: t.readyState,
-            settings: t.getSettings()
-        })));
-        console.log(`   Audio tracks (${audioTracks.length}):`, audioTracks.map(t => ({
-            id: t.id,
-            enabled: t.enabled,
-            muted: t.muted,
-            readyState: t.readyState
-        })));
-        console.log('═══════════════════════════════════════════════════════');
 
         const existingTile = document.getElementById(`${type}-video`);
         if (existingTile) {
-            console.log(`🗑️ Removing existing ${type} tile`);
             existingTile.remove();
         }
 
@@ -2890,46 +2835,12 @@ document.addEventListener('DOMContentLoaded', () => {
         height: 100%;
         object-fit: cover;
         display: block;
-        background: #000;
+        background: var(--primary-bg);
         -webkit-transform: translateZ(0);
         transform: translateZ(0);
     `;
 
-        console.log(`📹 Video element created for ${type}:`, {
-            autoplay: video.autoplay,
-            playsInline: video.playsInline,
-            muted: video.muted,
-            srcObject: !!video.srcObject,
-            readyState: video.readyState
-        });
-
-        video.addEventListener('loadedmetadata', () => {
-            console.log(`✅ ${type} video metadata loaded:`, {
-                videoWidth: video.videoWidth,
-                videoHeight: video.videoHeight,
-                duration: video.duration,
-                readyState: video.readyState
-            });
-        });
-
-        video.addEventListener('loadeddata', () => {
-            console.log(`✅ ${type} video data loaded`);
-        });
-
-        video.addEventListener('canplay', () => {
-            console.log(`✅ ${type} video can play`);
-        });
-
-        video.addEventListener('playing', () => {
-            console.log(`▶️ ${type} video is playing`);
-        });
-
-        video.addEventListener('pause', () => {
-            console.log(`⏸️ ${type} video paused`);
-        });
-
         video.addEventListener('error', (e) => {
-            console.error(`❌ ${type} video error:`, e);
             console.error('Video error details:', {
                 error: video.error,
                 code: video.error?.code,
@@ -2943,7 +2854,6 @@ document.addEventListener('DOMContentLoaded', () => {
         if (playPromise !== undefined) {
             playPromise
                 .then(() => {
-                    console.log(`✅ ${type} video play() succeeded immediately`);
                 })
                 .catch(err => {
                     console.error(`❌ ${type} video play() failed:`, err);
@@ -2956,7 +2866,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     });
 
                     if (!video.muted && type === 'remote') {
-                        console.log(`🔄 Retrying ${type} play with muted=true`);
                         video.muted = true;
                         video.play().catch(e => console.error('Retry failed:', e));
                     }
@@ -2974,27 +2883,9 @@ document.addEventListener('DOMContentLoaded', () => {
         nameTag.className = 'participant-name';
         nameTag.textContent = user.username;
 
-        const debugOverlay = document.createElement('div');
-        debugOverlay.className = 'video-debug-overlay';
-        debugOverlay.style.cssText = `
-        position: absolute;
-        top: 0;
-        right: 0;
-        background: rgba(0, 0, 0, 0.7);
-        color: #0f0;
-        padding: 0.5rem;
-        font-size: 0.7rem;
-        font-family: monospace;
-        z-index: 1000;
-        max-width: 200px;
-        word-wrap: break-word;
-    `;
-        updateDebugOverlay();
-
         tile.appendChild(video);
         tile.appendChild(placeholder);
         tile.appendChild(nameTag);
-        tile.appendChild(debugOverlay);
 
         tile.addEventListener('click', () => {
             tile.classList.toggle('fullscreen');
@@ -3002,35 +2893,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
         ui.videoGrid.appendChild(tile);
 
-        console.log(`📍 Tile appended to grid. Grid children count:`, ui.videoGrid.children.length);
-
-        function updateDebugOverlay() {
-            const videoTracks = stream.getVideoTracks();
-            const vt = videoTracks[0];
-
-            debugOverlay.innerHTML = `
-            <div>${type.toUpperCase()}</div>
-            <div>Stream: ${stream.active ? '🟢' : '🔴'}</div>
-            <div>Tracks: ${videoTracks.length}</div>
-            ${vt ? `
-            <div>Enabled: ${vt.enabled ? '✓' : '✗'}</div>
-            <div>Muted: ${vt.muted ? '✓' : '✗'}</div>
-            <div>Ready: ${vt.readyState}</div>
-            <div>Video: ${video.videoWidth}x${video.videoHeight}</div>
-            <div>Playing: ${!video.paused ? '✓' : '✗'}</div>
-            ` : '<div>No video track</div>'}
-        `;
-        }
-
-        setInterval(updateDebugOverlay, 1000);
-
         const updateVideoState = () => {
             const videoTracks = stream.getVideoTracks();
 
-            console.log(`🔄 updateVideoState called for ${type}`);
-
             if (videoTracks.length === 0) {
-                console.log(`⚠️ No video tracks for ${type}`);
                 tile.classList.add('video-off');
                 return;
             }
@@ -3038,19 +2904,9 @@ document.addEventListener('DOMContentLoaded', () => {
             const track = videoTracks[0];
             const isVideoOff = track.muted || !track.enabled || track.readyState !== 'live';
 
-            console.log(`📊 Video state for ${type}:`, {
-                muted: track.muted,
-                enabled: track.enabled,
-                readyState: track.readyState,
-                isVideoOff: isVideoOff,
-                settings: track.getSettings()
-            });
-
             if (isVideoOff) {
-                console.log(`❌ Video OFF for ${type}`);
                 tile.classList.add('video-off');
             } else {
-                console.log(`✅ Video ON for ${type}`);
                 tile.classList.remove('video-off');
                 const playAttempt = video.play();
                 if (playAttempt !== undefined) {
@@ -3060,7 +2916,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             }
 
-            updateDebugOverlay();
         };
 
         if (videoTracks.length > 0) {
@@ -3069,44 +2924,27 @@ document.addEventListener('DOMContentLoaded', () => {
             updateVideoState();
 
             track.addEventListener('mute', () => {
-                console.log(`🔇 Video track muted for ${type}`);
                 updateVideoState();
             });
 
             track.addEventListener('unmute', () => {
-                console.log(`🔊 Video track unmuted for ${type}`);
                 updateVideoState();
             });
 
             track.addEventListener('ended', () => {
-                console.log(`🛑 Video track ended for ${type}`);
                 updateVideoState();
             });
 
             stream.addEventListener('removetrack', (e) => {
-                console.log(`🗑️ Track removed from stream for ${type}:`, e.track);
                 updateVideoState();
             });
 
             stream.addEventListener('addtrack', (e) => {
-                console.log(`➕ Track added to stream for ${type}:`, e.track);
                 updateVideoState();
             });
         }
 
         setTimeout(() => {
-            console.log(`🔍 Final state check for ${type} (after 1s):`, {
-                tileInDOM: document.contains(tile),
-                videoInDOM: document.contains(video),
-                videoReadyState: video.readyState,
-                videoPaused: video.paused,
-                videoMuted: video.muted,
-                videoSrcObject: !!video.srcObject,
-                streamActive: stream.active,
-                videoWidth: video.videoWidth,
-                videoHeight: video.videoHeight,
-                computedStyle: window.getComputedStyle(video).display
-            });
         }, 1000);
     };
 

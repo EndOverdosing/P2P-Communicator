@@ -3,6 +3,9 @@ import { defineConfig } from 'vite'
 export default defineConfig({
     server: {
         host: true,
-        port: 3000
+        port: 3000,
+        allowedHosts: [
+            '.trycloudflare.com'
+        ]
     }
 })
