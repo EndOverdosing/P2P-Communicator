@@ -2460,20 +2460,6 @@ document.addEventListener('DOMContentLoaded', () => {
         ui.incomingCallAudio.currentTime = 0;
 
         try {
-            if (!mediaConnection) {
-                console.error('❌ mediaConnection is null/undefined!');
-                console.log('Current peer:', peer);
-                console.log('Current peer.id:', peer?.id);
-                throw new Error('No active call to answer');
-            }
-
-            console.log('✅ mediaConnection exists, proceeding...');
-
-            localStream = await navigator.mediaDevices.getUserMedia({
-                video: { width: { ideal: 1280 }, height: { ideal: 720 } },
-                audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }
-            });
-
             const callChannel = supabase.channel(`call-invite-${currentUser.id}`);
             await callChannel.subscribe();
 
@@ -2485,6 +2471,31 @@ document.addEventListener('DOMContentLoaded', () => {
                     accepterPeerId: peer.id,
                     timestamp: Date.now()
                 }
+            });
+
+            console.log('✅ Sent call_accepted event, waiting for PeerJS call...');
+
+            const waitForCall = new Promise((resolve, reject) => {
+                const timeout = setTimeout(() => {
+                    reject(new Error('Timed out waiting for call connection'));
+                }, 10000);
+
+                const checkCall = setInterval(() => {
+                    console.log('Checking for mediaConnection...', mediaConnection);
+                    if (mediaConnection) {
+                        clearInterval(checkCall);
+                        clearTimeout(timeout);
+                        resolve();
+                    }
+                }, 100);
+            });
+
+            await waitForCall;
+            console.log('✅ mediaConnection received:', mediaConnection);
+
+            localStream = await navigator.mediaDevices.getUserMedia({
+                video: { width: { ideal: 1280 }, height: { ideal: 720 } },
+                audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }
             });
 
             mediaConnection.on('error', (err) => {
