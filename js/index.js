@@ -2409,6 +2409,10 @@ document.addEventListener('DOMContentLoaded', () => {
         ui.incomingCallAudio.currentTime = 0;
 
         try {
+            if (!mediaConnection) {
+                throw new Error('No active call to answer');
+            }
+
             localStream = await navigator.mediaDevices.getUserMedia({
                 video: { width: { ideal: 1280 }, height: { ideal: 720 } },
                 audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }
@@ -2427,6 +2431,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             });
 
+            mediaConnection.on('error', (err) => {
+                console.error('Media connection error before answer:', err);
+                endCall();
+                showInfoModal('Call Error', 'Failed to establish call connection.');
+            });
+
             mediaConnection.answer(localStream);
 
             mediaConnection.on('stream', (remoteStream) => {
@@ -2442,58 +2452,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 endCall();
             });
 
-            mediaConnection.on('error', (err) => {
-                console.error('Media connection error:', err);
-                endCall();
-                showInfoModal('Call Error', 'Connection lost during call.');
-            });
-
-            const peerConnection = mediaConnection.peerConnection;
-            if (peerConnection) {
-                peerConnection.oniceconnectionstatechange = () => {
-                    if (peerConnection.iceConnectionState === 'disconnected' ||
-                        peerConnection.iceConnectionState === 'failed') {
-                        endCall();
-                        showInfoModal('Connection Lost', 'Call connection was lost.');
-                    }
-                };
-
-                peerConnection.onconnectionstatechange = () => {
-                    if (peerConnection.connectionState === 'disconnected' ||
-                        peerConnection.connectionState === 'failed') {
-                        endCall();
-                        showInfoModal('Connection Lost', 'Call connection was lost.');
-                    }
-                };
-            }
-
-            const callSessionChannel = supabase.channel(`call-session-${incomingCallData.from}-${currentUser.id}`);
-            await callSessionChannel.subscribe();
-
-            callSessionChannel.on('broadcast', { event: 'track_state_change' }, (payload) => {
-                const { trackType, enabled } = payload.payload;
-                if (trackType === 'video') {
-                    updateVideoState('remote', enabled);
-                }
-            });
-
-            callSessionChannel.on('broadcast', { event: 'call_ended' }, () => {
-                endCall();
-            });
-
-            subscriptions.push(callSessionChannel);
-
-        } catch (error) {
-            console.error('Error accepting call:', error);
-            let errorMsg = 'Could not access camera/microphone.';
-            if (error.name === 'NotAllowedError') {
-                errorMsg = 'Camera/microphone permission denied. Please allow access in your browser settings.';
-            } else if (error.name === 'NotFoundError') {
-                errorMsg = 'No camera or microphone found on this device.';
-            } else if (error.name === 'NotReadableError') {
-                errorMsg = 'Camera/microphone is already in use by another application.';
-            }
-            showInfoModal('Media Error', errorMsg);
+        } catch (err) {
+            console.error('Error accepting call:', err);
+            endCall();
+            showInfoModal('Call Error', 'Failed to start call. Please try again.');
         }
     };
 
