@@ -741,13 +741,6 @@ document.addEventListener('DOMContentLoaded', () => {
             })
             .subscribe();
 
-        if (peer) {
-            peer.on('call', (call) => {
-                mediaConnection = call;
-                handleIncomingCall(call);
-            });
-        }
-
         subscriptions.push(channel);
     };
 
