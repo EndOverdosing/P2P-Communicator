@@ -2476,11 +2476,6 @@ document.addEventListener('DOMContentLoaded', () => {
         ui.incomingCallAudio.currentTime = 0;
 
         try {
-            localStream = await navigator.mediaDevices.getUserMedia({
-                video: { width: { ideal: 1280 }, height: { ideal: 720 } },
-                audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }
-            });
-
             const callChannel = supabase.channel(`call-invite-${currentUser.id}`);
             await callChannel.subscribe();
 
@@ -2513,11 +2508,14 @@ document.addEventListener('DOMContentLoaded', () => {
             await waitForCall;
             console.log('✅ mediaConnection received:', mediaConnection);
 
+            localStream = await navigator.mediaDevices.getUserMedia({
+                video: { width: { ideal: 1280 }, height: { ideal: 720 } },
+                audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }
+            });
+
             ui.callSection.classList.remove('hidden');
             ui.chatView.classList.add('hidden');
             ui.videoGrid.innerHTML = '';
-
-            addVideoStream('local', localStream, currentUser);
 
             mediaConnection.on('error', (err) => {
                 console.error('Media connection error:', err);
@@ -2525,16 +2523,20 @@ document.addEventListener('DOMContentLoaded', () => {
                 showInfoModal('Call Error', 'Failed to establish call connection.');
             });
 
-            mediaConnection.answer(localStream);
-
             mediaConnection.on('stream', (remoteStream) => {
                 console.log('📺 Remote stream received:', remoteStream);
+                console.log('Remote stream tracks:', remoteStream.getTracks());
                 addVideoStream('remote', remoteStream, friends[incomingCallData.from]);
             });
 
             mediaConnection.on('close', () => {
                 endCall();
             });
+
+            console.log('📞 Answering call with local stream');
+            mediaConnection.answer(localStream);
+
+            addVideoStream('local', localStream, currentUser);
 
         } catch (err) {
             console.error('Error accepting call:', err);
