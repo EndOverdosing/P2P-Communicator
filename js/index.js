@@ -158,6 +158,10 @@ document.addEventListener('DOMContentLoaded', () => {
     let currentSwipeElement = null;
     let swipeThreshold = 60;
 
+    let activeCallInvite = null;
+    let callRetryInterval = null;
+    let callInviteTimeout = null;
+
     function initializeMessageSwipe() {
         const messagesContainer = ui.messagesContainer;
         if (!messagesContainer) {
@@ -378,12 +382,20 @@ document.addEventListener('DOMContentLoaded', () => {
         ui.callBtn.disabled = true;
 
         peer = new Peer(undefined, {
+            host: '0.peerjs.com',
+            port: 443,
+            path: '/',
+            secure: true,
             config: {
-                'iceServers': [
+                iceServers: [
                     { urls: 'stun:stun.l.google.com:19302' },
-                    { urls: 'stun:stun1.l.google.com:19302' }
-                ]
-            }
+                    { urls: 'stun:stun1.l.google.com:19302' },
+                    { urls: 'stun:stun2.l.google.com:19302' },
+                    { urls: 'stun:stun.services.mozilla.com' }
+                ],
+                iceCandidatePoolSize: 10
+            },
+            debug: 1
         });
 
         peer.on('open', async (id) => {
@@ -393,18 +405,34 @@ document.addEventListener('DOMContentLoaded', () => {
 
         peer.on('call', handleIncomingCall);
 
+        peer.on('disconnected', () => {
+            if (!peer.destroyed) {
+                setTimeout(() => {
+                    if (peer && !peer.destroyed) {
+                        peer.reconnect();
+                    }
+                }, 1000);
+            }
+        });
+
         peer.on('error', (error) => {
             console.error('Peer error:', error);
-            if (isInCall) {
-                ui.callSection.classList.add('hidden');
-                ui.chatView.classList.remove('hidden');
-                isInCall = false;
-            }
+
             if (error.type === 'peer-unavailable') {
-                showInfoModal('User Unavailable', 'The user is currently offline or unavailable.');
-            } else if (error.type === 'network') {
-                showInfoModal('Connection Error', 'Network error occurred. Please check your connection.');
-            } else if (error.type === 'disconnected') {
+                return;
+            }
+
+            if (error.type === 'network' || error.type === 'server-error') {
+                setTimeout(() => {
+                    if (peer && peer.destroyed) {
+                        initializePeer(userId);
+                    }
+                }, 3000);
+            }
+
+            if (isInCall) {
+                showInfoModal('Connection Error', 'Call connection lost. Please try again.');
+                endCall();
             }
         });
     };
@@ -637,6 +665,10 @@ document.addEventListener('DOMContentLoaded', () => {
             .on('broadcast', { event: 'incoming_call' }, async (payload) => {
                 const callerData = payload.payload;
 
+                if (isInCall) {
+                    return;
+                }
+
                 ui.callerName.textContent = callerData.callerName;
                 ui.callerAvatar.textContent = callerData.callerName[0].toUpperCase();
                 if (callerData.callerAvatar) {
@@ -652,43 +684,30 @@ document.addEventListener('DOMContentLoaded', () => {
                 showModal(ui.incomingCallModal);
                 ui.incomingCallAudio.play();
             })
-            .on('broadcast', { event: 'call_accepted' }, async (payload) => {
-
-                if (localStream && payload.payload.accepterPeerId) {
-                    const call = peer.call(payload.payload.accepterPeerId, localStream);
-
-                    call.on('stream', (remoteStream) => {
-                        const remoteVideo = document.createElement('video');
-                        remoteVideo.srcObject = remoteStream;
-                        remoteVideo.autoplay = true;
-                        remoteVideo.playsInline = true;
-                        remoteVideo.id = 'remote-video';
-                        ui.videoGrid.appendChild(remoteVideo);
-                    });
-
-                    call.on('error', (err) => {
-                        console.error('Call error:', err);
-                        showInfoModal('Call Error', 'Could not establish call connection.');
-                    });
-
-                    mediaConnection = call;
+            .on('broadcast', { event: 'call_cancelled' }, (payload) => {
+                if (payload.payload.callerId === incomingCallData?.from) {
+                    hideModal();
+                    ui.incomingCallAudio.pause();
+                    ui.incomingCallAudio.currentTime = 0;
+                    incomingCallData = null;
                 }
             })
             .on('broadcast', { event: 'call_declined' }, async (payload) => {
-                showInfoModal('Call Declined', 'The user declined your call.');
-                if (localStream) {
-                    localStream.getTracks().forEach(track => track.stop());
-                    localStream = null;
+                if (activeCallInvite && payload.payload.declinedBy === activeCallInvite.calleeId) {
+                    clearCallInvite();
+                    hideOutgoingCallUI();
+                    showInfoModal('Call Declined', 'The user declined your call.');
+                    if (localStream) {
+                        localStream.getTracks().forEach(track => track.stop());
+                        localStream = null;
+                    }
+                    if (mediaConnection) {
+                        mediaConnection.close();
+                        mediaConnection = null;
+                    }
                 }
-                ui.videoGrid.innerHTML = '';
-                ui.callSection.classList.add('hidden');
-                ui.chatView.classList.remove('hidden');
-                isInCall = false;
             })
-            .subscribe((status) => {
-                if (status === 'SUBSCRIBED') {
-                }
-            });
+            .subscribe();
 
         subscriptions.push(channel);
     };
@@ -2291,6 +2310,10 @@ document.addEventListener('DOMContentLoaded', () => {
         showModal(ui.changeUsernameModal);
     };
 
+    ui.callBtn.onclick = () => {
+        startCall();
+    };
+
     ui.changeUsernameForm.onsubmit = async (e) => {
         e.preventDefault();
         const newUsername = ui.newUsernameInput.value.trim();
@@ -2342,6 +2365,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
+
     const handleIncomingCall = (call) => {
         mediaConnection = call;
         incomingCallData = call.metadata;
@@ -2362,73 +2386,105 @@ document.addEventListener('DOMContentLoaded', () => {
 
         showModal(ui.incomingCallModal);
         ui.incomingCallAudio.play();
+
+        call.on('close', () => {
+            if (isInCall) {
+                endCall();
+                showInfoModal('Call Ended', 'The call has ended.');
+            }
+        });
+
+        call.on('error', (err) => {
+            console.error('Incoming call error:', err);
+            hideModal();
+            ui.incomingCallAudio.pause();
+            ui.incomingCallAudio.currentTime = 0;
+            showInfoModal('Call Error', 'Could not establish call connection.');
+        });
     };
 
     ui.acceptCallBtn.onclick = async () => {
-
         hideModal();
         ui.incomingCallAudio.pause();
         ui.incomingCallAudio.currentTime = 0;
 
         try {
             localStream = await navigator.mediaDevices.getUserMedia({
-                video: true,
-                audio: true
+                video: { width: { ideal: 1280 }, height: { ideal: 720 } },
+                audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }
             });
 
-            ui.callSection.classList.remove('hidden');
-            ui.chatView.classList.add('hidden');
+            const callChannel = supabase.channel(`call-invite-${currentUser.id}`);
+            await callChannel.subscribe();
 
-            const localVideo = document.createElement('video');
-            localVideo.srcObject = localStream;
-            localVideo.autoplay = true;
-            localVideo.muted = true;
-            localVideo.playsInline = true;
-            localVideo.id = 'local-video';
-
-            ui.videoGrid.innerHTML = '';
-            ui.videoGrid.appendChild(localVideo);
-
-            peer.on('call', (call) => {
-                call.answer(localStream);
-
-                call.on('stream', (remoteStream) => {
-                    const remoteVideo = document.createElement('video');
-                    remoteVideo.srcObject = remoteStream;
-                    remoteVideo.autoplay = true;
-                    remoteVideo.playsInline = true;
-                    remoteVideo.id = 'remote-video';
-                    ui.videoGrid.appendChild(remoteVideo);
-                });
-
-                call.on('error', (err) => {
-                    console.error('Call error:', err);
-                });
-
-                mediaConnection = call;
-            });
-
-            isInCall = true;
-
-            const callChannel = supabase.channel(`call-invite-${incomingCallData.from}`);
-            callChannel.subscribe(async (status) => {
-                if (status === 'SUBSCRIBED') {
-                    await callChannel.send({
-                        type: 'broadcast',
-                        event: 'call_accepted',
-                        payload: {
-                            acceptedBy: currentUser.id,
-                            accepterPeerId: peer.id
-                        }
-                    });
+            await callChannel.send({
+                type: 'broadcast',
+                event: 'call_accepted',
+                payload: {
+                    acceptedBy: currentUser.id,
+                    accepterPeerId: peer.id,
+                    timestamp: Date.now()
                 }
             });
 
+            mediaConnection.answer(localStream);
+
+            mediaConnection.on('stream', (remoteStream) => {
+                ui.callSection.classList.remove('hidden');
+                ui.chatView.classList.add('hidden');
+                isInCall = true;
+                ui.videoGrid.innerHTML = '';
+                addVideoStream('local', localStream, currentUser);
+                addVideoStream('remote', remoteStream, friends[incomingCallData.from]);
+            });
+
+            mediaConnection.on('close', () => {
+                endCall();
+            });
+
+            mediaConnection.on('error', (err) => {
+                console.error('Media connection error:', err);
+                endCall();
+                showInfoModal('Call Error', 'Connection lost during call.');
+            });
+
+            const peerConnection = mediaConnection.peerConnection;
+            if (peerConnection) {
+                peerConnection.oniceconnectionstatechange = () => {
+                    if (peerConnection.iceConnectionState === 'disconnected' ||
+                        peerConnection.iceConnectionState === 'failed') {
+                        endCall();
+                        showInfoModal('Connection Lost', 'Call connection was lost.');
+                    }
+                };
+
+                peerConnection.onconnectionstatechange = () => {
+                    if (peerConnection.connectionState === 'disconnected' ||
+                        peerConnection.connectionState === 'failed') {
+                        endCall();
+                        showInfoModal('Connection Lost', 'Call connection was lost.');
+                    }
+                };
+            }
+
+            const callSessionChannel = supabase.channel(`call-session-${incomingCallData.from}-${currentUser.id}`);
+            await callSessionChannel.subscribe();
+
+            callSessionChannel.on('broadcast', { event: 'track_state_change' }, (payload) => {
+                const { trackType, enabled } = payload.payload;
+                if (trackType === 'video') {
+                    updateVideoState('remote', enabled);
+                }
+            });
+
+            callSessionChannel.on('broadcast', { event: 'call_ended' }, () => {
+                endCall();
+            });
+
+            subscriptions.push(callSessionChannel);
+
         } catch (error) {
             console.error('Error accepting call:', error);
-            console.error('Error name:', error.name);
-            console.error('Error message:', error.message);
-
             let errorMsg = 'Could not access camera/microphone.';
             if (error.name === 'NotAllowedError') {
                 errorMsg = 'Camera/microphone permission denied. Please allow access in your browser settings.';
@@ -2436,13 +2492,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 errorMsg = 'No camera or microphone found on this device.';
             } else if (error.name === 'NotReadableError') {
                 errorMsg = 'Camera/microphone is already in use by another application.';
-            } else if (error.name === 'OverconstrainedError') {
-                errorMsg = 'No camera/microphone meets the requirements.';
-            } else if (error.name === 'SecurityError') {
-                errorMsg = 'Camera/microphone access blocked. This app requires HTTPS on mobile devices.';
             }
-
-            showInfoModal('Media Error', errorMsg + '\n\nProtocol: ' + window.location.protocol + '\nSecure: ' + window.isSecureContext);
+            showInfoModal('Media Error', errorMsg);
         }
     };
 
@@ -2451,14 +2502,20 @@ document.addEventListener('DOMContentLoaded', () => {
         ui.incomingCallAudio.pause();
         ui.incomingCallAudio.currentTime = 0;
 
-        const callChannel = supabase.channel(`call-invite-${incomingCallData.from}`);
-        callChannel.subscribe(async (status) => {
-            if (status === 'SUBSCRIBED') {
-                await callChannel.send({
-                    type: 'broadcast',
-                    event: 'call_declined',
-                    payload: { declinedBy: currentUser.id }
-                });
+        if (mediaConnection) {
+            mediaConnection.close();
+            mediaConnection = null;
+        }
+
+        const callChannel = supabase.channel(`call-invite-${currentUser.id}`);
+        await callChannel.subscribe();
+
+        await callChannel.send({
+            type: 'broadcast',
+            event: 'call_declined',
+            payload: {
+                declinedBy: currentUser.id,
+                timestamp: Date.now()
             }
         });
 
@@ -2467,22 +2524,38 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const showOutgoingCallUI = (friendName) => {
         const callUIHTML = `
-            <div id="outgoing-call-overlay" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.9); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 10000; color: white;">
-                <div class="avatar" style="width: 120px; height: 120px; font-size: 48px; margin-bottom: 2rem;">${friendName[0].toUpperCase()}</div>
-                <h2 style="margin-bottom: 0.5rem;">Calling ${friendName}...</h2>
-                <p style="color: rgba(255, 255, 255, 0.7); margin-bottom: 3rem;">Waiting for response</p>
-                <button id="cancel-outgoing-call" style="padding: 1rem 2rem; background: var(--error); color: white; border: none; border-radius: var(--button-border-radius); cursor: pointer; font-size: 1rem;">
-                    <i class="fa-solid fa-phone-slash"></i> Cancel
-                </button>
-            </div>
-        `;
+        <div id="outgoing-call-overlay" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.9); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 10000; color: white;">
+            <div class="avatar" style="width: 120px; height: 120px; font-size: 48px; margin-bottom: 2rem;">${friendName[0].toUpperCase()}</div>
+            <h2 style="margin-bottom: 0.5rem;">Calling ${friendName}...</h2>
+            <p style="color: rgba(255, 255, 255, 0.7); margin-bottom: 3rem;">Waiting for response</p>
+            <button id="cancel-outgoing-call" style="padding: 1rem 2rem; background: var(--error); color: white; border: none; border-radius: var(--button-border-radius); cursor: pointer; font-size: 1rem;">
+                <i class="fa-solid fa-phone-slash"></i> Cancel
+            </button>
+        </div>
+    `;
         const overlay = document.createElement('div');
         overlay.innerHTML = callUIHTML;
         document.body.appendChild(overlay.firstElementChild);
 
-        document.getElementById('cancel-outgoing-call').onclick = () => {
+        document.getElementById('cancel-outgoing-call').onclick = async () => {
+            clearCallInvite();
+
             const outgoingOverlay = document.getElementById('outgoing-call-overlay');
             if (outgoingOverlay) outgoingOverlay.remove();
+
+            if (activeCallInvite) {
+                const callChannel = supabase.channel(`call-invite-${activeCallInvite.calleeId}`);
+                await callChannel.subscribe();
+                await callChannel.send({
+                    type: 'broadcast',
+                    event: 'call_cancelled',
+                    payload: {
+                        callerId: currentUser.id,
+                        timestamp: Date.now()
+                    }
+                });
+            }
+
             if (mediaConnection) {
                 mediaConnection.close();
                 mediaConnection = null;
@@ -2506,77 +2579,186 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        showOutgoingCallUI(currentChatFriend.username);
-
-        const callInvite = {
-            caller_id: currentUser.id,
-            callee_id: currentChatFriend.id,
-            status: 'pending',
-            created_at: new Date().toISOString()
-        };
-
-        const { data: existingCall } = await supabase
-            .from('call_invites')
-            .select('*')
-            .eq('caller_id', currentUser.id)
-            .eq('callee_id', currentChatFriend.id)
-            .eq('status', 'pending')
-            .single();
-
-        if (existingCall) {
-            hideOutgoingCallUI();
-            showInfoModal('Call already pending', 'You already have a pending call to this user.');
+        if (activeCallInvite) {
+            showInfoModal('Call in progress', 'You already have an active call invitation.');
             return;
         }
 
-        const { data: insertedInvite } = await supabase
-            .from('call_invites')
-            .insert([callInvite])
-            .select()
-            .single();
+        showOutgoingCallUI(currentChatFriend.username);
 
+        activeCallInvite = {
+            calleeId: currentChatFriend.id,
+            calleeName: currentChatFriend.username,
+            startTime: Date.now()
+        };
 
-        const { data: friendProfile } = await supabase
-            .from('profiles')
-            .select('peer_id')
-            .eq('id', currentChatFriend.id)
-            .single();
+        const callChannel = supabase.channel(`call-invite-${currentChatFriend.id}`);
+        await callChannel.subscribe();
 
-        if (friendProfile?.peer_id) {
+        callChannel.on('broadcast', { event: 'call_accepted' }, async (payload) => {
+            if (payload.payload.acceptedBy === currentChatFriend.id) {
+                clearCallInvite();
+                await initiateCallConnection(currentChatFriend.id, payload.payload.accepterPeerId);
+            }
+        });
+
+        callChannel.on('broadcast', { event: 'call_declined' }, (payload) => {
+            if (payload.payload.declinedBy === currentChatFriend.id) {
+                clearCallInvite();
+                hideOutgoingCallUI();
+                showInfoModal('Call Declined', 'The user declined your call.');
+            }
+        });
+
+        subscriptions.push(callChannel);
+
+        const sendCallInvite = async () => {
+            await callChannel.send({
+                type: 'broadcast',
+                event: 'incoming_call',
+                payload: {
+                    callerId: currentUser.id,
+                    callerName: currentUser.username,
+                    callerAvatar: currentUser.avatar_url,
+                    callerPeerId: peer.id,
+                    timestamp: Date.now()
+                }
+            });
+        };
+
+        await sendCallInvite();
+
+        callRetryInterval = setInterval(async () => {
+            if (activeCallInvite) {
+                await sendCallInvite();
+            }
+        }, 3000);
+
+        callInviteTimeout = setTimeout(() => {
+            clearCallInvite();
+            hideOutgoingCallUI();
+            showInfoModal('No Response', 'The user did not answer the call.');
+        }, 20000);
+    };
+
+    const initiateCallConnection = async (calleeId, calleePeerId) => {
+        try {
+            localStream = await navigator.mediaDevices.getUserMedia({
+                video: { width: { ideal: 1280 }, height: { ideal: 720 } },
+                audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }
+            });
+
+            const call = peer.call(calleePeerId, localStream, {
+                metadata: {
+                    from: currentUser.id,
+                    timestamp: Date.now()
+                }
+            });
+
+            mediaConnection = call;
+            let callEstablished = false;
             const startTime = Date.now();
 
-            try {
-                localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-
-                const call = peer.call(friendProfile.peer_id, localStream, {
-                    metadata: { from: currentUser.id, callInviteId: insertedInvite.id }
-                });
-
-                mediaConnection = call;
-
-                call.on('stream', (remoteStream) => {
+            const connectionTimeout = setTimeout(() => {
+                if (!callEstablished) {
+                    call.close();
                     hideOutgoingCallUI();
-                    showCallUI();
-                    addVideoStream('local', localStream, currentUser);
-                    addVideoStream('remote', remoteStream, currentChatFriend);
-                });
+                    if (localStream) {
+                        localStream.getTracks().forEach(track => track.stop());
+                        localStream = null;
+                    }
+                    showInfoModal('Connection Failed', 'Could not establish connection.');
+                }
+            }, 30000);
 
-                call.on('close', async () => {
-                    hideOutgoingCallUI();
-                    const duration = Math.floor((Date.now() - startTime) / 1000);
-                    await saveCallRecord(currentChatFriend.id, duration);
-                    await supabase.from('call_invites').update({ status: 'completed' }).eq('id', insertedInvite.id);
-                    endCall();
-                });
-
-            } catch (error) {
+            call.on('stream', (remoteStream) => {
+                callEstablished = true;
+                clearTimeout(connectionTimeout);
                 hideOutgoingCallUI();
-                showInfoModal('Media access denied', 'Could not access camera/microphone. Please check your permissions.');
+                ui.callSection.classList.remove('hidden');
+                ui.chatView.classList.add('hidden');
+                isInCall = true;
+                ui.videoGrid.innerHTML = '';
+                addVideoStream('local', localStream, currentUser);
+                addVideoStream('remote', remoteStream, currentChatFriend);
+            });
+
+            call.on('close', async () => {
+                clearTimeout(connectionTimeout);
+                hideOutgoingCallUI();
+                const duration = Math.floor((Date.now() - startTime) / 1000);
+                await saveCallRecord(calleeId, duration);
+                endCall();
+            });
+
+            call.on('error', (err) => {
+                clearTimeout(connectionTimeout);
+                console.error('Call error:', err);
+                hideOutgoingCallUI();
+                if (localStream) {
+                    localStream.getTracks().forEach(track => track.stop());
+                    localStream = null;
+                }
+                showInfoModal('Call Failed', 'Could not establish connection.');
+            });
+
+            const peerConnection = call.peerConnection;
+            if (peerConnection) {
+                peerConnection.oniceconnectionstatechange = () => {
+                    if (peerConnection.iceConnectionState === 'connected') {
+                        callEstablished = true;
+                    } else if (peerConnection.iceConnectionState === 'disconnected' ||
+                        peerConnection.iceConnectionState === 'failed') {
+                        if (callEstablished) {
+                            hideOutgoingCallUI();
+                            endCall();
+                            showInfoModal('Connection Lost', 'Call connection was lost.');
+                        }
+                    }
+                };
             }
-        } else {
+
+            const callChannel = supabase.channel(`call-session-${currentUser.id}-${calleeId}`);
+            await callChannel.subscribe();
+
+            callChannel.on('broadcast', { event: 'track_state_change' }, (payload) => {
+                const { trackType, enabled } = payload.payload;
+                if (trackType === 'video') {
+                    updateVideoState('remote', enabled);
+                }
+            });
+
+            callChannel.on('broadcast', { event: 'call_ended' }, () => {
+                hideOutgoingCallUI();
+                endCall();
+            });
+
+            subscriptions.push(callChannel);
+
+        } catch (error) {
             hideOutgoingCallUI();
-            showInfoModal('Call sent', 'Your friend will see the call invitation when they come online.');
+            let errorMsg = 'Could not access camera/microphone.';
+            if (error.name === 'NotAllowedError') {
+                errorMsg = 'Camera/microphone permission denied. Please allow access in your browser settings.';
+            } else if (error.name === 'NotFoundError') {
+                errorMsg = 'No camera or microphone found on this device.';
+            } else if (error.name === 'NotReadableError') {
+                errorMsg = 'Camera/microphone is already in use by another application.';
+            }
+            showInfoModal('Media Error', errorMsg);
         }
+    };
+
+    const clearCallInvite = () => {
+        if (callRetryInterval) {
+            clearInterval(callRetryInterval);
+            callRetryInterval = null;
+        }
+        if (callInviteTimeout) {
+            clearTimeout(callInviteTimeout);
+            callInviteTimeout = null;
+        }
+        activeCallInvite = null;
     };
 
     const saveCallRecord = async (otherUserId, duration) => {
@@ -2639,19 +2821,41 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
-    const endCall = () => {
+    const endCall = async () => {
         if (localStream) {
             localStream.getTracks().forEach(track => track.stop());
             localStream = null;
         }
+
         if (mediaConnection) {
+            const otherUserId = currentChatFriend?.id || incomingCallData?.from;
+
             mediaConnection.close();
+
+            if (otherUserId) {
+                const callChannel = supabase.channel(`call-session-${currentUser.id}-${otherUserId}`);
+                await callChannel.subscribe();
+                await callChannel.send({
+                    type: 'broadcast',
+                    event: 'call_ended',
+                    payload: { userId: currentUser.id, timestamp: Date.now() }
+                });
+            }
+
             mediaConnection = null;
         }
+
         ui.videoGrid.innerHTML = '';
         ui.callSection.classList.add('hidden');
+        ui.chatView.classList.remove('hidden');
         isInCall = false;
         callState = { isMuted: false, isVideoEnabled: true, isScreenSharing: false };
+
+        ui.muteBtn.classList.remove('danger');
+        ui.muteBtn.innerHTML = '<i class="fa-solid fa-microphone"></i>';
+        ui.toggleVideoBtn.classList.add('active');
+        ui.toggleVideoBtn.innerHTML = '<i class="fa-solid fa-video"></i>';
+        ui.shareScreenBtn.classList.remove('active');
     };
 
     ui.stopCallBtn.onclick = endCall;
@@ -2665,10 +2869,31 @@ document.addEventListener('DOMContentLoaded', () => {
 
     ui.toggleVideoBtn.onclick = async () => {
         callState.isVideoEnabled = !callState.isVideoEnabled;
-        if (localStream) localStream.getVideoTracks().forEach(t => t.enabled = callState.isVideoEnabled);
+
+        if (localStream) {
+            localStream.getVideoTracks().forEach(t => t.enabled = callState.isVideoEnabled);
+        }
+
         updateVideoState('local', callState.isVideoEnabled);
         ui.toggleVideoBtn.classList.toggle('active', callState.isVideoEnabled);
-        ui.toggleVideoBtn.innerHTML = callState.isVideoEnabled ? '<i class="fa-solid fa-video"></i>' : '<i class="fa-solid fa-video-slash"></i>';
+        ui.toggleVideoBtn.innerHTML = callState.isVideoEnabled ?
+            '<i class="fa-solid fa-video"></i>' :
+            '<i class="fa-solid fa-video-slash"></i>';
+
+        const otherUserId = currentChatFriend?.id || incomingCallData?.from;
+        if (otherUserId) {
+            const callChannel = supabase.channel(`call-session-${currentUser.id}-${otherUserId}`);
+            await callChannel.subscribe();
+            await callChannel.send({
+                type: 'broadcast',
+                event: 'track_state_change',
+                payload: {
+                    trackType: 'video',
+                    enabled: callState.isVideoEnabled,
+                    peerId: peer.id
+                }
+            });
+        }
     };
 
     ui.shareScreenBtn.onclick = async () => {
