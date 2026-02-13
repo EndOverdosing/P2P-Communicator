@@ -2406,6 +2406,13 @@ document.addEventListener('DOMContentLoaded', () => {
         console.log('🎯 handleIncomingCall called');
         console.log('Received call:', call);
         console.log('Current mediaConnection before assignment:', mediaConnection);
+        console.log('isInCall:', isInCall);
+
+        if (isInCall) {
+            console.log('⚠️ Already in a call, ignoring new incoming call');
+            call.close();
+            return;
+        }
 
         mediaConnection = call;
         console.log('mediaConnection after assignment:', mediaConnection);
@@ -2454,6 +2461,8 @@ document.addEventListener('DOMContentLoaded', () => {
         console.log('🟢 ACCEPT BUTTON CLICKED');
         console.log('mediaConnection state:', mediaConnection);
         console.log('incomingCallData:', incomingCallData);
+
+        isInCall = true;
 
         hideModal();
         ui.incomingCallAudio.pause();
@@ -2509,7 +2518,6 @@ document.addEventListener('DOMContentLoaded', () => {
             mediaConnection.on('stream', (remoteStream) => {
                 ui.callSection.classList.remove('hidden');
                 ui.chatView.classList.add('hidden');
-                isInCall = true;
                 ui.videoGrid.innerHTML = '';
                 addVideoStream('local', localStream, currentUser);
                 addVideoStream('remote', remoteStream, friends[incomingCallData.from]);
@@ -2521,6 +2529,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         } catch (err) {
             console.error('Error accepting call:', err);
+            isInCall = false;
             endCall();
             showInfoModal('Call Error', 'Failed to start call. Please try again.');
         }
