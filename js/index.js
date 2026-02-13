@@ -128,13 +128,10 @@ document.addEventListener('DOMContentLoaded', () => {
     let isInCall = false;
     let typingTimeout = null;
 
-    let currentPath = 'messages';
-
     let keepAliveInterval = null;
     let currentChatType = 'friend';
     let blockedUsers = new Set();
     let friendRequests = [];
-    let pendingRequests = [];
     let replyingTo = null;
     let editingMessage = null;
     let pendingFiles = [];
@@ -151,7 +148,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const HEARTBEAT_INTERVAL = 3000;
     let heartbeatTimer = null;
-    let lastActivityTime = Date.now();
     let isTabVisible = true;
 
     let touchStartX = 0;
@@ -228,19 +224,9 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    function fileToBase64(file) {
-        return new Promise((resolve, reject) => {
-            const reader = new FileReader();
-            reader.onload = () => resolve(reader.result);
-            reader.onerror = reject;
-            reader.readAsDataURL(file);
-        });
-    }
-
     document.addEventListener('visibilitychange', () => {
         isTabVisible = !document.hidden;
         if (isTabVisible) {
-            lastActivityTime = Date.now();
             if (currentUser) {
                 updateUserPresence();
             }
@@ -604,7 +590,6 @@ document.addEventListener('DOMContentLoaded', () => {
             .eq('status', 'pending');
 
         friendRequests = incoming || [];
-        pendingRequests = outgoing || [];
     };
 
     const loadBlockedUsers = async () => {
@@ -1102,17 +1087,10 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     const updateURLPath = (path) => {
-        currentPath = path;
         if (window.history && window.history.pushState) {
             window.history.pushState({ path }, '', `/#/${path}`);
         }
     };
-
-    window.addEventListener('popstate', (e) => {
-        if (e.state && e.state.path) {
-            currentPath = e.state.path;
-        }
-    });
 
     const renderFriendRequests = () => {
         if (friendRequests.length === 0) {
@@ -2822,14 +2800,15 @@ document.addEventListener('DOMContentLoaded', () => {
         await updateConversationsList();
     };
 
-    const showCallUI = () => {
-        ui.callSection.classList.remove('hidden');
-        isInCall = true;
-    };
-
     const addVideoStream = (type, stream, user) => {
+        console.log(`🎬 addVideoStream called - type: ${type}, user:`, user);
+        console.log('Stream:', stream);
+        console.log('Stream tracks:', stream.getTracks());
+        console.log('Stream active:', stream.active);
+
         const existingTile = document.getElementById(`${type}-video`);
         if (existingTile) {
+            console.log(`Removing existing ${type} tile`);
             existingTile.remove();
         }
 
@@ -2845,6 +2824,22 @@ document.addEventListener('DOMContentLoaded', () => {
         if (type === 'local') {
             video.muted = true;
         }
+
+        console.log(`Video element created for ${type}:`, video);
+        console.log(`Video srcObject set:`, video.srcObject);
+
+        video.onloadedmetadata = () => {
+            console.log(`✅ Video metadata loaded for ${type}`);
+            console.log(`Video dimensions: ${video.videoWidth}x${video.videoHeight}`);
+        };
+
+        video.onplay = () => {
+            console.log(`▶️ Video started playing for ${type}`);
+        };
+
+        video.onerror = (e) => {
+            console.error(`❌ Video error for ${type}:`, e);
+        };
 
         const placeholder = document.createElement('div');
         placeholder.className = 'video-off-placeholder';
@@ -2862,19 +2857,29 @@ document.addEventListener('DOMContentLoaded', () => {
         tile.appendChild(nameTag);
 
         tile.addEventListener('click', () => {
+            console.log(`Toggling fullscreen for ${type}`);
             tile.classList.toggle('fullscreen');
         });
 
+        console.log(`Appending ${type} tile to video grid`);
         ui.videoGrid.appendChild(tile);
+        console.log(`${type} tile appended, videoGrid children count:`, ui.videoGrid.children.length);
 
         stream.getVideoTracks().forEach(track => {
+            console.log(`Video track for ${type}:`, track);
+            console.log(`Track enabled: ${track.enabled}, muted: ${track.muted}, readyState: ${track.readyState}`);
+
             track.onended = () => {
+                console.log(`Video track ended for ${type}`);
                 tile.classList.add('video-off');
             };
             if (!track.enabled) {
+                console.log(`Video track disabled for ${type}, adding video-off class`);
                 tile.classList.add('video-off');
             }
         });
+
+        console.log(`✅ addVideoStream completed for ${type}`);
     };
 
     const updateVideoState = (id, enabled) => {
