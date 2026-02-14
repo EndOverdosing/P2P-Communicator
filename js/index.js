@@ -2167,7 +2167,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
         let lastTap = 0;
-        const DOUBLE_TAP_DELAY = 300; // milliseconds
+        const DOUBLE_TAP_DELAY = 300;
 
         messageDiv.addEventListener('touchend', (e) => {
             const currentTime = new Date().getTime();
@@ -2175,7 +2175,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
             if (tapLength < DOUBLE_TAP_DELAY && tapLength > 0) {
                 e.preventDefault();
-                // Create a synthetic event for the context menu
                 const touch = e.changedTouches[0];
                 const event = new MouseEvent('contextmenu', {
                     clientX: touch.clientX,
