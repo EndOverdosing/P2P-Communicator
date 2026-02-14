@@ -208,8 +208,10 @@ document.addEventListener('DOMContentLoaded', () => {
         };
     }
 
-    function switchTab(tab) {
+    async function switchTab(tab) {
         currentTab = tab;
+        updateURLPath(tab);
+
         document.querySelectorAll('.navbar-btn').forEach(btn => {
             btn.classList.toggle('active', btn.dataset.tab === tab);
         });
@@ -222,27 +224,25 @@ document.addEventListener('DOMContentLoaded', () => {
             el.classList.toggle('hidden', tab !== 'global');
         });
 
-        if (tab !== 'personal') {
-            ui.welcomeScreen.classList.remove('hidden');
-            ui.chatView.classList.add('hidden');
-        }
-
         currentChatFriend = null;
         currentServer = null;
+
+        ui.welcomeScreen.classList.remove('hidden');
+        ui.chatView.classList.add('hidden');
 
         unsubscribeFromServerMessages();
 
         if (tab === 'global') {
-            loadServers();
+            await loadServers();
         } else if (tab === 'personal') {
-            ui.welcomeScreen.classList.remove('hidden');
-            ui.chatView.classList.add('hidden');
             renderConversationsList();
         }
     }
 
     document.querySelectorAll('.navbar-btn').forEach(btn => {
-        btn.addEventListener('click', () => switchTab(btn.dataset.tab));
+        btn.addEventListener('click', async () => {
+            await switchTab(btn.dataset.tab);
+        });
     });
 
     ui.createServerBtn?.addEventListener('click', () => {
@@ -312,42 +312,19 @@ document.addEventListener('DOMContentLoaded', () => {
             if (error) throw error;
 
             servers = data || [];
-            renderServers();
+            if (currentTab === 'global') {
+                renderConversationsList();
+            }
         } catch (error) {
             console.error('Error loading servers:', error);
         }
     }
 
     function renderServers() {
-        ui.contentList.innerHTML = '';
-
-        const searchTerm = ui.searchInput?.value?.toLowerCase() || '';
-        const filteredServers = servers.filter(server => {
-            return server.name.toLowerCase().includes(searchTerm);
-        });
-
-        filteredServers.forEach(server => {
-            const serverItem = document.createElement('div');
-            serverItem.className = 'server-item';
-
-            const initials = server.name.substring(0, 2).toUpperCase();
-            const memberCount = server.server_members?.[0]?.count || 0;
-
-            serverItem.innerHTML = `
-            <div class="server-icon">${initials}</div>
-            <div class="server-info">
-                <span class="server-name">${server.name}</span>
-                <div class="server-meta">
-                    <span>${memberCount} members</span>
-                    ${server.is_private ? '<i class="fa-solid fa-lock server-lock-icon"></i>' : ''}
-                </div>
-            </div>
-        `;
-
-            serverItem.addEventListener('click', () => joinServer(server));
-            ui.contentList.appendChild(serverItem);
-        });
+        renderConversationsList();
     }
+
+    window.joinServer = joinServer;
 
     async function joinServer(server) {
         try {
@@ -411,6 +388,8 @@ document.addEventListener('DOMContentLoaded', () => {
         currentServer = server;
         currentChatFriend = null;
         currentChatType = 'server';
+
+        updateURLPath(`server/${server.id}`);
 
         ui.welcomeScreen.classList.add('hidden');
         ui.chatView.classList.remove('hidden');
@@ -492,7 +471,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     async function loadServerMessages(serverId) {
-        // Show skeleton loaders
         showSkeletonMessages();
 
         try {
@@ -504,7 +482,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
             if (error) throw error;
 
-            // Fetch all user data in parallel
             const userIds = [...new Set((data || []).map(msg => msg.user_id))];
             const userPromises = userIds.map(async (userId) => {
                 const { data: userData } = await supabaseClient
@@ -521,11 +498,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 return acc;
             }, {});
 
-            // Render all messages at once
             renderAllServerMessages(data || [], userMap);
         } catch (error) {
             console.error('[LOAD] Error loading server messages:', error);
-            // Clear skeletons on error
             ui.messagesContainer.innerHTML = '';
         }
     }
@@ -1080,6 +1055,7 @@ document.addEventListener('DOMContentLoaded', () => {
             await loadFriends();
             await loadFriendRequests();
             await loadBlockedUsers();
+            await updateConversationsList();
             await checkPendingCallInvites();
 
             subscribeToPresence();
@@ -1096,6 +1072,10 @@ document.addEventListener('DOMContentLoaded', () => {
             startHeartbeat();
             loadSettings();
 
+            setTimeout(() => {
+                handleRouting();
+            }, 500);
+
             return true;
         } catch (error) {
             console.error('Failed to load user data:', error);
@@ -1105,6 +1085,46 @@ document.addEventListener('DOMContentLoaded', () => {
 
     let loadFriendsTimeout = null;
     let isLoadingFriends = false;
+
+    const updateConversationsList = async () => {
+        if (isUpdatingConversations) {
+            return;
+        }
+
+        isUpdatingConversations = true;
+
+        conversations = [];
+
+        for (const friendId in friends) {
+            const friend = friends[friendId];
+            const { data: messages } = await supabase
+                .from('messages')
+                .select('*')
+                .or(`and(sender_id.eq.${currentUser.id},receiver_id.eq.${friendId}),and(sender_id.eq.${friendId},receiver_id.eq.${currentUser.id})`)
+                .order('created_at', { ascending: false })
+                .limit(1);
+
+            const lastMessage = messages?.[0];
+            conversations.push({
+                type: 'friend',
+                id: friendId,
+                data: friend,
+                lastMessage: lastMessage,
+                timestamp: lastMessage?.created_at || friend.created_at
+            });
+        }
+
+        conversations.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+
+        if (currentTab === 'personal') {
+            renderConversationsList();
+        }
+
+        clearTimeout(updateConversationsTimeout);
+        updateConversationsTimeout = setTimeout(() => {
+            isUpdatingConversations = false;
+        }, 500);
+    };
 
     const loadFriends = async () => {
         if (isLoadingFriends) {
@@ -1144,8 +1164,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 uniqueFriendIds.add(friend.id);
             }
         });
-
-        await updateConversationsList();
 
         clearTimeout(loadFriendsTimeout);
         loadFriendsTimeout = setTimeout(() => {
@@ -1395,7 +1413,8 @@ document.addEventListener('DOMContentLoaded', () => {
             .on('postgres_changes', {
                 event: 'UPDATE',
                 schema: 'public',
-                table: 'messages'
+                table: 'messages',
+                filter: `or(receiver_id.eq.${currentUser.id},sender_id.eq.${currentUser.id})`
             }, (payload) => {
                 updateMessageInUI(payload.new);
             })
@@ -1406,15 +1425,13 @@ document.addEventListener('DOMContentLoaded', () => {
             }, (payload) => {
                 removeMessageFromUI(payload.old.id);
             })
-            .subscribe((status) => {
-            });
+            .subscribe();
 
         subscriptions.push(channel);
     };
 
     const subscribeToMessageBroadcasts = () => {
         if (!currentUser || !currentUser.id) return;
-
 
         const channel = supabase.channel(`messages-${currentUser.id}`);
 
@@ -1439,6 +1456,45 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
 
                     await updateConversationsList();
+                }
+            })
+            .on('broadcast', { event: 'message_deleted' }, (payload) => {
+                const messageId = payload.payload.messageId;
+                removeMessageFromUI(messageId);
+            })
+            .on('broadcast', { event: 'message_updated' }, (payload) => {
+                const { messageId, content } = payload.payload;
+                const msgElement = document.querySelector(`[data-message-id="${messageId}"]`);
+                if (msgElement) {
+                    const contentElement = msgElement.querySelector('.message-content');
+                    if (contentElement) {
+                        contentElement.textContent = content;
+                        const editedBadge = msgElement.querySelector('.message-edited') || document.createElement('span');
+                        editedBadge.className = 'message-edited';
+                        editedBadge.textContent = '(edited)';
+                        editedBadge.style.cssText = 'font-size: 0.75rem; color: var(--secondary-text); margin-left: 0.5rem;';
+                        if (!msgElement.querySelector('.message-edited')) {
+                            contentElement.appendChild(editedBadge);
+                        }
+                    }
+                }
+            })
+            .on('broadcast', { event: 'reaction_updated' }, async (payload) => {
+                const { messageId, reactions } = payload.payload;
+
+                const { data: message } = await supabase
+                    .from('messages')
+                    .select('sender_id, receiver_id')
+                    .eq('id', messageId)
+                    .single();
+
+                if (message) {
+                    const isInCurrentChat = currentChatFriend &&
+                        (message.sender_id === currentChatFriend.id || message.receiver_id === currentChatFriend.id);
+
+                    if (isInCurrentChat) {
+                        renderReactions(messageId, reactions || {});
+                    }
                 }
             })
             .subscribe();
@@ -1584,45 +1640,6 @@ document.addEventListener('DOMContentLoaded', () => {
     let renderConversationsTimeout = null;
     let isRenderingConversations = false;
 
-    const updateConversationsList = async () => {
-        if (isUpdatingConversations) {
-            return;
-        }
-
-        isUpdatingConversations = true;
-
-        conversations = [];
-
-        for (const friendId in friends) {
-            const friend = friends[friendId];
-            const { data: messages } = await supabase
-                .from('messages')
-                .select('*')
-                .or(`and(sender_id.eq.${currentUser.id},receiver_id.eq.${friendId}),and(sender_id.eq.${friendId},receiver_id.eq.${currentUser.id})`)
-                .order('created_at', { ascending: false })
-                .limit(1);
-
-            const lastMessage = messages?.[0];
-            conversations.push({
-                type: 'friend',
-                id: friendId,
-                data: friend,
-                lastMessage: lastMessage,
-                timestamp: lastMessage?.created_at || friend.created_at
-            });
-        }
-
-        conversations.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
-
-        clearTimeout(renderConversationsTimeout);
-        renderConversationsTimeout = setTimeout(renderConversationsList, 200);
-
-        clearTimeout(updateConversationsTimeout);
-        updateConversationsTimeout = setTimeout(() => {
-            isUpdatingConversations = false;
-        }, 500);
-    };
-
     const renderConversationsList = () => {
         if (isRenderingConversations) {
             return;
@@ -1630,61 +1647,148 @@ document.addEventListener('DOMContentLoaded', () => {
 
         isRenderingConversations = true;
 
-        let html = '';
+        ui.contentList.innerHTML = '';
 
-        if (friendRequests.length > 0) {
-            html += `<div class="list-header">Friend Requests (${friendRequests.length})</div>`;
-            html += `<div class="friend-item" onclick="window.showFriendRequestsModal()">
-            <div class="avatar"><i class="fa-solid fa-user-plus"></i></div>
-            <div class="friend-info">
-                <div class="friend-name">Pending Requests</div>
-                <div class="friend-status">${friendRequests.length} request${friendRequests.length !== 1 ? 's' : ''}</div>
-            </div>
-        </div>`;
-        }
+        const searchTerm = ui.searchInput?.value?.toLowerCase() || '';
 
-        if (conversations.length > 0) {
-            conversations.forEach(conv => {
-                if (conv.type === 'friend') {
-                    const friend = conv.data;
-                    const isOnline = onlineUsers.has(friend.id);
-                    const isBlocked = blockedUsers.has(friend.id);
-                    if (!isBlocked) {
-                        html += `
-                <div class="friend-item" data-friend-id="${friend.id}" onclick="window.openChat('${friend.id}', 'friend')">
-                    <div class="avatar-wrapper">
-                        <div class="avatar">${friend.avatar_url ? `<img src="${friend.avatar_url}" alt="${friend.username}">` : friend.username[0].toUpperCase()}</div>
-                        <div class="status-indicator ${isOnline ? 'online' : ''}"></div>
-                    </div>
+        if (currentTab === 'personal') {
+            const hasFriendRequests = friendRequests.length > 0;
+            const hasConversations = conversations.length > 0;
+
+            if (hasFriendRequests || hasConversations) {
+                if (hasFriendRequests) {
+                    const headerDiv = document.createElement('div');
+                    headerDiv.className = 'list-header';
+                    headerDiv.textContent = `Friend Requests (${friendRequests.length})`;
+                    ui.contentList.appendChild(headerDiv);
+
+                    const requestDiv = document.createElement('div');
+                    requestDiv.className = 'friend-item';
+                    requestDiv.innerHTML = `
+                    <div class="avatar"><i class="fa-solid fa-user-plus"></i></div>
                     <div class="friend-info">
-                        <div class="friend-name">${friend.username}</div>
-                        <div class="friend-status">${conv.lastMessage ? (conv.lastMessage.sender_id === currentUser.id ? 'You: ' : '') + (conv.lastMessage.content?.substring(0, 30) || 'Sent a file') : 'No messages yet'}</div>
+                        <div class="friend-name">Pending Requests</div>
+                        <div class="friend-status">${friendRequests.length} request${friendRequests.length !== 1 ? 's' : ''}</div>
                     </div>
-                </div>
-            `;
-                    }
+                `;
+                    requestDiv.addEventListener('click', () => {
+                        window.showFriendRequestsModal();
+                    });
+                    ui.contentList.appendChild(requestDiv);
                 }
-            });
-        }
 
-        if (currentTab === 'global' && servers.length > 0) {
-            html += `<div class="list-header">Servers</div>`;
-            servers.forEach(server => {
-                html += `
-        <div class="server-item" data-server-id="${server.id}" onclick="window.openServerChat(${JSON.stringify(server).replace(/"/g, '&​quot;')})">
-            <div class="avatar-wrapper">
-                <div class="avatar server-avatar">${server.name.substring(0, 2).toUpperCase()}</div>
-            </div>
-            <div class="friend-info">
-                <div class="friend-name">${server.name}</div>
-                <div class="friend-status">${server.member_count || 0} members</div>
-            </div>
+                if (hasConversations) {
+                    const filteredConversations = conversations.filter(conv => {
+                        if (conv.type === 'friend') {
+                            const friend = conv.data;
+                            return friend.username.toLowerCase().includes(searchTerm);
+                        }
+                        return false;
+                    });
+
+                    filteredConversations.forEach(conv => {
+                        if (conv.type === 'friend') {
+                            const friend = conv.data;
+                            const isOnline = onlineUsers.has(friend.id);
+                            const isBlocked = blockedUsers.has(friend.id);
+                            if (!isBlocked) {
+                                const friendDiv = document.createElement('div');
+                                friendDiv.className = 'friend-item';
+                                friendDiv.dataset.friendId = friend.id;
+
+                                friendDiv.innerHTML = `
+                                <div class="avatar-wrapper">
+                                    <div class="avatar">${friend.avatar_url ? `<img src="${friend.avatar_url}" alt="${friend.username}">` : friend.username[0].toUpperCase()}</div>
+                                    <div class="status-indicator ${isOnline ? 'online' : ''}"></div>
+                                </div>
+                                <div class="friend-info">
+                                    <div class="friend-name">${friend.username}</div>
+                                    <div class="friend-status">${conv.lastMessage ? (conv.lastMessage.sender_id === currentUser.id ? 'You: ' : '') + (conv.lastMessage.content?.substring(0, 30) || 'Sent a file') : 'No messages yet'}</div>
+                                </div>
+                            `;
+
+                                friendDiv.addEventListener('click', () => {
+                                    window.openChat(friend.id, 'friend');
+                                });
+
+                                ui.contentList.appendChild(friendDiv);
+                            }
+                        }
+                    });
+                }
+            }
+
+            if (!hasFriendRequests && !hasConversations) {
+                const emptyState = document.createElement('div');
+                emptyState.className = 'empty-state';
+                emptyState.innerHTML = `
+                    <i class="fa-regular fa-comment-dots"></i>
+                    <h3>No conversations yet</h3>
+                    <p>Add friends to start chatting</p>
+                    <button id="add-friend-empty" class="btn btn-primary">
+                        <i class="fa-solid fa-user-plus"></i> Add Friend
+                    </button>
+                `;
+                ui.contentList.appendChild(emptyState);
+
+                document.getElementById('add-friend-empty')?.addEventListener('click', () => {
+                    document.getElementById('add-friend-btn')?.click();
+                });
+            }
+        } else if (currentTab === 'global') {
+            const filteredServers = servers.filter(server => {
+                return server.name.toLowerCase().includes(searchTerm);
+            });
+
+            if (filteredServers.length > 0) {
+                filteredServers.forEach(server => {
+                    const initials = server.name.substring(0, 2).toUpperCase();
+                    const memberCount = server.server_members?.[0]?.count || 0;
+
+                    const serverDiv = document.createElement('div');
+                    serverDiv.className = 'server-item';
+                    serverDiv.dataset.serverId = server.id;
+
+                    serverDiv.innerHTML = `
+    <div class="avatar-wrapper">
+        <div class="avatar server-avatar" style="background: var(--primary-accent);">${initials}</div>
+    </div>
+    <div class="friend-info">
+        <div class="server-name">
+            ${server.name}
+            ${server.is_private ? '<i class="fa-solid fa-lock server-lock-icon"></i>' : ''}
         </div>
-    `;
-            });
-        }
+        <div class="server-meta">
+            <span>Members:</span> <span>${memberCount}</span>
+        </div>
+    </div>
+`;
 
-        ui.contentList.innerHTML = html;
+                    serverDiv.addEventListener('click', () => {
+                        joinServer(server);
+                    });
+
+                    ui.contentList.appendChild(serverDiv);
+                });
+            } else {
+                const emptyState = document.createElement('div');
+                emptyState.className = 'empty-state';
+                emptyState.innerHTML = `
+                    <i class="fa-solid fa-globe"></i>
+                    <h3>No servers found</h3>
+                    <p>Try a different search term or create a new server</p>
+                    <button id="create-server-empty" class="btn btn-primary">
+                        <i class="fa-solid fa-plus"></i> Create Server
+                    </button>
+                `;
+                ui.contentList.appendChild(emptyState);
+
+                document.getElementById('create-server-empty')?.addEventListener('click', () => {
+                    hideModal();
+                    showModal(ui.createServerModal);
+                });
+            }
+        }
 
         clearTimeout(renderConversationsTimeout);
         renderConversationsTimeout = setTimeout(() => {
@@ -1697,6 +1801,14 @@ document.addEventListener('DOMContentLoaded', () => {
         showModal(ui.friendRequestsModal);
         renderFriendRequests();
     };
+
+    window.showFriendRequestsModal = () => {
+        updateURLPath('friend-requests');
+        showModal(ui.friendRequestsModal);
+        renderFriendRequests();
+    };
+
+    window.joinServer = joinServer;
 
     const updateURLPath = (path) => {
         if (window.history && window.history.pushState) {
@@ -1759,8 +1871,16 @@ document.addEventListener('DOMContentLoaded', () => {
         renderFriendRequests();
         await updateConversationsList();
 
-        const notifyChannel = supabase.channel(`friend-requests-${request.user_id}`);
-        await notifyChannel.subscribe();
+        const notifyChannel = supabase.channel(`friend-requests-${request.user_id}`, {
+            config: { broadcast: { self: false } }
+        });
+
+        await new Promise((resolve) => {
+            notifyChannel.subscribe((status) => {
+                if (status === 'SUBSCRIBED') resolve();
+            });
+        });
+
         await notifyChannel.send({
             type: 'broadcast',
             event: 'friend_accepted',
@@ -1793,8 +1913,16 @@ document.addEventListener('DOMContentLoaded', () => {
         await loadFriendRequests();
         renderFriendRequests();
 
-        const notifyChannel = supabase.channel(`friend-requests-${request.user_id}`);
-        await notifyChannel.subscribe();
+        const notifyChannel = supabase.channel(`friend-requests-${request.user_id}`, {
+            config: { broadcast: { self: false } }
+        });
+
+        await new Promise((resolve) => {
+            notifyChannel.subscribe((status) => {
+                if (status === 'SUBSCRIBED') resolve();
+            });
+        });
+
         await notifyChannel.send({
             type: 'broadcast',
             event: 'request_declined',
@@ -1833,7 +1961,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const friendInfo = document.querySelector('#chat-header .friend-info');
         if (friendInfo) {
             friendInfo.onclick = () => {
-                if (currentChatType === 'friend' && currentChatFriend) {  // Added null check
+                if (currentChatType === 'friend' && currentChatFriend) {
                     ui.profileUsername.textContent = currentChatFriend.username;
                     ui.profileUsernameValue.textContent = currentChatFriend.username;
                     ui.profileAvatar.textContent = currentChatFriend.username[0].toUpperCase();
@@ -1894,11 +2022,9 @@ document.addEventListener('DOMContentLoaded', () => {
         subscriptions.push(typingChannel);
     };
 
-    // Helper functions for skeleton loading and batch rendering
     function showSkeletonMessages() {
         ui.messagesContainer.innerHTML = '';
 
-        // Show 5-8 skeleton messages
         const skeletonCount = Math.floor(Math.random() * 4) + 5;
 
         for (let i = 0; i < skeletonCount; i++) {
@@ -1920,19 +2046,17 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (messages.length === 0) return;
 
-        // Create document fragment for better performance
         const fragment = document.createDocumentFragment();
 
         messages.forEach(message => {
             const sender = message.sender_id === currentUser.id ? currentUser : currentChatFriend;
+            if (!sender) return;
             const messageDiv = createMessageElement(message, sender);
             fragment.appendChild(messageDiv);
         });
 
-        // Append all messages at once
         ui.messagesContainer.appendChild(fragment);
 
-        // Scroll to bottom immediately after rendering
         requestAnimationFrame(() => {
             scrollToBottom();
         });
@@ -1943,7 +2067,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (messages.length === 0) return;
 
-        // Create document fragment for better performance
         const fragment = document.createDocumentFragment();
 
         messages.forEach(msg => {
@@ -1951,10 +2074,8 @@ document.addEventListener('DOMContentLoaded', () => {
             fragment.appendChild(messageDiv);
         });
 
-        // Append all messages at once
         ui.messagesContainer.appendChild(fragment);
 
-        // Scroll to bottom immediately after rendering
         requestAnimationFrame(() => {
             scrollToBottom();
         });
@@ -2040,14 +2161,32 @@ document.addEventListener('DOMContentLoaded', () => {
             messageDiv.appendChild(timestampDiv);
         }
 
-        if (message.sender_id === currentUser.id) {
-            messageDiv.addEventListener('contextmenu', (e) => showMessageContextMenu(e, message));
-            messageDiv.addEventListener('click', (e) => {
-                if (e.target.closest('.message-content') && !e.target.closest('.message-reaction')) {
-                    showMessageContextMenu(e, message);
-                }
-            });
-        }
+        messageDiv.addEventListener('contextmenu', (e) => {
+            e.preventDefault();
+            showMessageContextMenu(e, message);
+        });
+
+        let lastTap = 0;
+        const DOUBLE_TAP_DELAY = 300; // milliseconds
+
+        messageDiv.addEventListener('touchend', (e) => {
+            const currentTime = new Date().getTime();
+            const tapLength = currentTime - lastTap;
+
+            if (tapLength < DOUBLE_TAP_DELAY && tapLength > 0) {
+                e.preventDefault();
+                // Create a synthetic event for the context menu
+                const touch = e.changedTouches[0];
+                const event = new MouseEvent('contextmenu', {
+                    clientX: touch.clientX,
+                    clientY: touch.clientY,
+                    bubbles: true,
+                    cancelable: true
+                });
+                messageDiv.dispatchEvent(event);
+            }
+            lastTap = currentTime;
+        }, { passive: false });
 
         messageDiv.addEventListener('click', (e) => {
             if (e.target.classList.contains('message-reaction')) {
@@ -2077,17 +2216,19 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     const loadMessages = async (friendId) => {
-        // Show skeleton loaders
         showSkeletonMessages();
 
         try {
+            if (!currentChatFriend) {
+                currentChatFriend = friends[friendId];
+            }
+
             const { data: messages } = await supabase
                 .from('messages')
                 .select('*')
                 .or(`and(sender_id.eq.${currentUser.id},receiver_id.eq.${friendId}),and(sender_id.eq.${friendId},receiver_id.eq.${currentUser.id})`)
                 .order('created_at', { ascending: true });
 
-            // Render all messages at once
             renderAllMessages(messages || []);
 
             if (userSettings.readReceipts) {
@@ -2100,7 +2241,6 @@ document.addEventListener('DOMContentLoaded', () => {
             scrollToBottom();
         } catch (error) {
             console.error('Error loading messages:', error);
-            // Clear skeletons on error
             ui.messagesContainer.innerHTML = '';
         }
     };
@@ -2187,14 +2327,7 @@ document.addEventListener('DOMContentLoaded', () => {
             messageDiv.appendChild(timestampDiv);
         }
 
-        if (message.sender_id === currentUser.id) {
-            messageDiv.addEventListener('contextmenu', (e) => showMessageContextMenu(e, message));
-            messageDiv.addEventListener('click', (e) => {
-                if (e.target.closest('.message-content') && !e.target.closest('.message-reaction')) {
-                    showMessageContextMenu(e, message);
-                }
-            });
-        }
+        messageDiv.addEventListener('contextmenu', (e) => showMessageContextMenu(e, message));
 
         messageDiv.addEventListener('click', (e) => {
             if (e.target.classList.contains('message-reaction')) {
@@ -2253,32 +2386,78 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const existingMenu = document.querySelector('.context-menu');
         if (existingMenu) existingMenu.remove();
+        const existingBackdrop = document.querySelector('.context-menu-backdrop');
+        if (existingBackdrop) existingBackdrop.remove();
 
         const menu = document.createElement('div');
         menu.className = 'context-menu';
-        menu.style.cssText = `
-        position: fixed;
-        left: ${e.clientX}px;
-        top: ${e.clientY}px;
-        background: var(--secondary-bg);
-        border: 1px solid var(--border-color);
-        border-radius: var(--card-border-radius);
-        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
-        z-index: 10001;
-        min-width: 150px;
-        padding: 0.5rem 0;
-    `;
+
+        const isMobile = window.innerWidth <= 768;
+        const isSentMessage = message.sender_id === currentUser.id;
+
+        if (isMobile) {
+            menu.style.cssText = `
+            position: fixed;
+            left: 0;
+            bottom: 0;
+            right: 0;
+            background: var(--secondary-bg);
+            border-radius: var(--card-border-radius) var(--card-border-radius) 0 0;
+            z-index: 10002;
+            width: 100%;
+            padding: 1rem 0 2rem 0;
+            animation: slideUp 0.3s ease-out;
+        `;
+        } else {
+            const menuWidth = 200;
+            const menuHeight = 250;
+
+            let clientX = e.clientX;
+            let clientY = e.clientY;
+
+            if (e.changedTouches && e.changedTouches.length > 0) {
+                clientX = e.changedTouches[0].clientX;
+                clientY = e.changedTouches[0].clientY;
+            }
+
+            let left = clientX;
+            let top = clientY;
+
+            if (left + menuWidth > window.innerWidth) {
+                left = window.innerWidth - menuWidth - 10;
+            }
+            if (left < 10) {
+                left = 10;
+            }
+
+            if (top + menuHeight > window.innerHeight) {
+                top = window.innerHeight - menuHeight - 10;
+            }
+            if (top < 10) {
+                top = 10;
+            }
+
+            menu.style.cssText = `
+            position: fixed;
+            left: ${left}px;
+            top: ${top}px;
+            background: var(--secondary-bg);
+            border-radius: var(--card-border-radius);
+            z-index: 10002;
+            min-width: 200px;
+            padding: 0.5rem 0;
+        `;
+        }
 
         const items = [
             { icon: 'fa-reply', text: 'Reply', action: () => window.replyToMessage(message.id, message.content || 'File') },
             { icon: 'fa-face-smile', text: 'React', action: () => window.addReaction(message.id) }
         ];
 
-        if (message.content && message.sender_id === currentUser.id) {
-            items.push({ icon: 'fa-edit', text: 'Edit', action: () => window.editMessage(message.id, message.content) });
-        }
-
-        if (message.sender_id === currentUser.id) {
+        if (isSentMessage) {
+            if (message.content) {
+                items.push({ icon: 'fa-edit', text: 'Edit', action: () => window.editMessage(message.id, message.content) });
+            }
             items.push({ icon: 'fa-trash', text: 'Delete', action: () => window.deleteMessage(message.id), danger: true });
         }
 
@@ -2297,22 +2476,52 @@ document.addEventListener('DOMContentLoaded', () => {
         `;
             menuItem.onmouseover = () => menuItem.style.background = 'var(--tertiary-bg)';
             menuItem.onmouseout = () => menuItem.style.background = 'transparent';
-            menuItem.onclick = () => {
+            menuItem.onclick = (ev) => {
+                ev.stopPropagation();
                 item.action();
                 menu.remove();
+                const backdrop = document.querySelector('.context-menu-backdrop');
+                if (backdrop) backdrop.remove();
             };
             menu.appendChild(menuItem);
         });
 
+        let backdrop = null;
+        if (isMobile) {
+            backdrop = document.createElement('div');
+            backdrop.className = 'context-menu-backdrop';
+            backdrop.style.cssText = `
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: var(--primary-bg)
+            z-index: 10001;
+            animation: fadeIn 0.3s ease-out;
+        `;
+            backdrop.onclick = () => {
+                menu.remove();
+                backdrop.remove();
+            };
+            document.body.appendChild(backdrop);
+        }
+
         document.body.appendChild(menu);
 
-        const closeMenu = (e) => {
-            if (!menu.contains(e.target)) {
+        const closeMenu = (ev) => {
+            if (!menu.contains(ev.target)) {
                 menu.remove();
+                const backdrop = document.querySelector('.context-menu-backdrop');
+                if (backdrop) backdrop.remove();
                 document.removeEventListener('click', closeMenu);
+                document.removeEventListener('touchstart', closeMenu);
             }
         };
-        setTimeout(() => document.addEventListener('click', closeMenu), 10);
+        setTimeout(() => {
+            document.addEventListener('click', closeMenu);
+            document.addEventListener('touchstart', closeMenu);
+        }, 100);
     };
 
     if (ui.fileInput) {
@@ -2346,10 +2555,32 @@ document.addEventListener('DOMContentLoaded', () => {
 
     window.replyToMessage = (messageId, content) => {
         replyingTo = { id: messageId, content };
-        ui.replyPreviewText.textContent = content.substring(0, 100);
+        const displayText = content && content.trim() ? content : 'File';
+        ui.replyPreviewText.textContent = displayText.substring(0, 100);
         ui.replyPreview.classList.remove('hidden');
         ui.messageInput.focus();
     };
+
+    const style = document.createElement('style');
+    style.textContent = `
+    @keyframes slideUp {
+        from {
+            transform: translateY(100%);
+        }
+        to {
+            transform: translateY(0);
+        }
+    }
+    @keyframes fadeIn {
+        from {
+            opacity: 0;
+        }
+        to {
+            opacity: 1;
+        }
+    }
+`;
+    document.head.appendChild(style);
 
     ui.cancelReplyBtn.onclick = () => {
         replyingTo = null;
@@ -2367,11 +2598,44 @@ document.addEventListener('DOMContentLoaded', () => {
         const newContent = ui.editMessageInput.value.trim();
         if (!newContent || !editingMessage) return;
 
-        const table = 'messages';
-        await supabase.from(table).update({
+        const { data: message } = await supabase
+            .from('messages')
+            .select('sender_id, receiver_id')
+            .eq('id', editingMessage.id)
+            .single();
+
+        const { error } = await supabase.from('messages').update({
             content: newContent,
             edited: true
         }).eq('id', editingMessage.id);
+
+        if (error) {
+            showInfoModal('Error', 'Failed to edit message.');
+            return;
+        }
+
+        if (message) {
+            const otherUserId = message.sender_id === currentUser.id ? message.receiver_id : message.sender_id;
+
+            const channel = supabase.channel(`messages-${otherUserId}`, {
+                config: { broadcast: { self: false } }
+            });
+
+            await new Promise((resolve) => {
+                channel.subscribe((status) => {
+                    if (status === 'SUBSCRIBED') resolve();
+                });
+            });
+
+            await channel.send({
+                type: 'broadcast',
+                event: 'message_updated',
+                payload: {
+                    messageId: editingMessage.id,
+                    content: newContent
+                }
+            });
+        }
 
         editingMessage = null;
         hideModal();
@@ -2379,7 +2643,48 @@ document.addEventListener('DOMContentLoaded', () => {
 
     window.deleteMessage = async (messageId) => {
         showConfirmationModal('Delete this message?', 'This action cannot be undone.', async () => {
-            await supabase.from('messages').delete().eq('id', messageId);
+
+            const { data: message } = await supabase
+                .from('messages')
+                .select('sender_id, receiver_id')
+                .eq('id', messageId)
+                .single();
+
+            if (!message) return;
+
+            const { data, error } = await supabase.from('messages').delete().eq('id', messageId).select();
+
+            if (error) {
+                console.error('[DELETE DEBUG] Delete failed:', error);
+                showInfoModal('Error', 'Failed to delete message.');
+                return;
+            }
+
+            removeMessageFromUI(messageId);
+
+            const otherUserId = message.sender_id === currentUser.id ? message.receiver_id : message.sender_id;
+
+            const channel = supabase.channel(`messages-${otherUserId}`, {
+                config: {
+                    broadcast: { self: false }
+                }
+            });
+
+            await new Promise((resolve) => {
+                channel.subscribe((status) => {
+                    if (status === 'SUBSCRIBED') {
+                        resolve();
+                    }
+                });
+            });
+
+            await channel.send({
+                type: 'broadcast',
+                event: 'message_deleted',
+                payload: { messageId: messageId }
+            });
+
+            await updateConversationsList();
         });
     };
 
@@ -2473,7 +2778,10 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     const toggleReaction = async (messageId, emoji) => {
-        const { data: message } = await supabase.from('messages').select('reactions').eq('id', messageId).single();
+        const { data: message } = await supabase.from('messages').select('reactions, sender_id, receiver_id').eq('id', messageId).single();
+
+        if (!message) return;
+
         let reactions = message?.reactions || {};
 
         if (!reactions[emoji]) {
@@ -2481,6 +2789,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         const userIndex = reactions[emoji].indexOf(currentUser.id);
+
         if (userIndex > -1) {
             reactions[emoji].splice(userIndex, 1);
             if (reactions[emoji].length === 0) {
@@ -2492,10 +2801,32 @@ document.addEventListener('DOMContentLoaded', () => {
 
         await supabase.from('messages').update({ reactions }).eq('id', messageId);
         renderReactions(messageId, reactions);
+
+        const otherUserId = message.sender_id === currentUser.id ? message.receiver_id : message.sender_id;
+
+        const channel = supabase.channel(`messages-${otherUserId}`, {
+            config: { broadcast: { self: false } }
+        });
+
+        await new Promise((resolve) => {
+            channel.subscribe((status) => {
+                if (status === 'SUBSCRIBED') resolve();
+            });
+        });
+
+        await channel.send({
+            type: 'broadcast',
+            event: 'reaction_updated',
+            payload: {
+                messageId,
+                reactions: reactions
+            }
+        });
     };
 
     const renderReactions = (messageId, reactions) => {
         const container = document.querySelector(`[data-message-id="${messageId}"] .message-reactions`);
+
         if (!container) return;
 
         let html = '';
@@ -2505,6 +2836,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 html += `<span class="message-reaction ${hasReacted ? 'reacted' : ''}" data-emoji="${emoji}">${emoji} ${users.length}</span>`;
             }
         }
+
         container.innerHTML = html;
     };
 
@@ -2669,6 +3001,13 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     };
 
+    ui.messageInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            ui.messageForm.dispatchEvent(new Event('submit'));
+        }
+    });
+
     let typingChannels = {};
 
     ui.messageInput.addEventListener('input', () => {
@@ -2795,15 +3134,20 @@ document.addEventListener('DOMContentLoaded', () => {
         showInfoModal('Request sent', 'Friend request sent successfully!');
 
         const targetUserId = targetUser.id;
-        const notifyChannel = supabase.channel(`friend-requests-${targetUserId}`);
-        notifyChannel.subscribe(async (status) => {
-            if (status === 'SUBSCRIBED') {
-                await notifyChannel.send({
-                    type: 'broadcast',
-                    event: 'friend_request',
-                    payload: { fromUserId: currentUser.id }
-                });
-            }
+        const notifyChannel = supabase.channel(`friend-requests-${targetUserId}`, {
+            config: { broadcast: { self: false } }
+        });
+
+        await new Promise((resolve) => {
+            notifyChannel.subscribe((status) => {
+                if (status === 'SUBSCRIBED') resolve();
+            });
+        });
+
+        await notifyChannel.send({
+            type: 'broadcast',
+            event: 'friend_request',
+            payload: { fromUserId: currentUser.id }
         });
     };
 
@@ -3122,7 +3466,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
             if (updateError) throw updateError;
 
-
             currentUser.avatar_url = publicUrl;
             ui.settingsAvatar.innerHTML = `<img src="${publicUrl}" alt="${currentUser.username}">`;
             ui.userAvatar.innerHTML = `<img src="${publicUrl}" alt="${currentUser.username}">`;
@@ -3130,15 +3473,20 @@ document.addEventListener('DOMContentLoaded', () => {
             e.target.value = '';
 
             for (const friendId in friends) {
-                const channel = supabase.channel(`profile-updates-${friendId}`);
-                channel.subscribe(async (status) => {
-                    if (status === 'SUBSCRIBED') {
-                        await channel.send({
-                            type: 'broadcast',
-                            event: 'avatar_updated',
-                            payload: { userId: currentUser.id, avatarUrl: publicUrl }
-                        });
-                    }
+                const channel = supabase.channel(`profile-updates-${friendId}`, {
+                    config: { broadcast: { self: false } }
+                });
+
+                await new Promise((resolve) => {
+                    channel.subscribe((status) => {
+                        if (status === 'SUBSCRIBED') resolve();
+                    });
+                });
+
+                await channel.send({
+                    type: 'broadcast',
+                    event: 'avatar_updated',
+                    payload: { userId: currentUser.id, avatarUrl: publicUrl }
                 });
             }
 
@@ -3203,6 +3551,24 @@ document.addEventListener('DOMContentLoaded', () => {
             ui.newUsernameInput.value = '';
             hideModal();
             showInfoModal('Success', 'Username updated successfully!');
+
+            for (const friendId in friends) {
+                const channel = supabase.channel(`profile-updates-${friendId}`, {
+                    config: { broadcast: { self: false } }
+                });
+
+                await new Promise((resolve) => {
+                    channel.subscribe((status) => {
+                        if (status === 'SUBSCRIBED') resolve();
+                    });
+                });
+
+                await channel.send({
+                    type: 'broadcast',
+                    event: 'username_updated',
+                    payload: { userId: currentUser.id, username: newUsername }
+                });
+            }
         } catch (error) {
             console.error('Update error:', error);
             showInfoModal('Error', 'Could not update username. Please try again.');
@@ -3265,8 +3631,19 @@ document.addEventListener('DOMContentLoaded', () => {
         ui.incomingCallAudio.currentTime = 0;
 
         try {
-            const callChannel = supabase.channel(`call-invite-${currentUser.id}`);
-            await callChannel.subscribe();
+            const callChannel = supabase.channel(`call-invite-${currentUser.id}`, {
+                config: {
+                    broadcast: { self: false, ack: true }
+                }
+            });
+
+            await new Promise((resolve) => {
+                callChannel.subscribe((status) => {
+                    if (status === 'SUBSCRIBED') {
+                        resolve();
+                    }
+                });
+            });
 
             await callChannel.send({
                 type: 'broadcast',
@@ -3277,56 +3654,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     timestamp: Date.now()
                 }
             });
-
-            const waitForCall = new Promise((resolve, reject) => {
-                const timeout = setTimeout(() => {
-                    reject(new Error('Timed out waiting for call connection'));
-                }, 10000);
-
-                const checkCall = setInterval(() => {
-                    if (mediaConnection) {
-                        clearInterval(checkCall);
-                        clearTimeout(timeout);
-                        resolve();
-                    }
-                }, 100);
-            });
-
-            await waitForCall;
-
-            localStream = await navigator.mediaDevices.getUserMedia({
-                video: { width: { ideal: 1280 }, height: { ideal: 720 } },
-                audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }
-            });
-
-            ui.callSection.classList.remove('hidden');
-            ui.chatView.classList.add('hidden');
-            ui.videoGrid.innerHTML = '';
-
-            let remoteStreamReceived = false;
-
-            mediaConnection.on('error', (err) => {
-                console.error('Media connection error:', err);
-                endCall();
-                showInfoModal('Call Error', 'Failed to establish call connection.');
-            });
-
-            mediaConnection.on('stream', (remoteStream) => {
-                if (remoteStreamReceived) {
-                    return;
-                }
-                remoteStreamReceived = true;
-
-                addVideoStream('remote', remoteStream, friends[incomingCallData.from]);
-            });
-
-            mediaConnection.on('close', () => {
-                endCall();
-            });
-
-            mediaConnection.answer(localStream);
-
-            addVideoStream('local', localStream, currentUser);
 
         } catch (err) {
             console.error('Error accepting call:', err);
@@ -3456,8 +3783,14 @@ document.addEventListener('DOMContentLoaded', () => {
             startTime: Date.now()
         };
 
-        const callChannel = supabase.channel(`call-invite-${currentChatFriend.id}`);
-        await callChannel.subscribe();
+        const callChannel = supabase.channel(`call-invite-${currentChatFriend.id}`, {
+            config: {
+                broadcast: {
+                    self: false,
+                    ack: true
+                }
+            }
+        });
 
         callChannel.on('broadcast', { event: 'call_accepted' }, async (payload) => {
             if (payload.payload.acceptedBy === currentChatFriend.id) {
@@ -3474,6 +3807,15 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
 
+        const subscriptionPromise = new Promise((resolve) => {
+            callChannel.subscribe((status) => {
+                if (status === 'SUBSCRIBED') {
+                    resolve();
+                }
+            });
+        });
+
+        await subscriptionPromise;
         subscriptions.push(callChannel);
 
         const sendCallInvite = async () => {
@@ -4066,5 +4408,75 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     handleAuth();
+
+    const handleRouting = () => {
+        const path = window.location.pathname;
+        const parts = path.split('/').filter(Boolean);
+
+        if (parts.length === 0) {
+            switchTab('personal');
+            return;
+        }
+
+        const route = parts[0];
+        const id = parts[1];
+
+        switch (route) {
+            case 'personal':
+                switchTab('personal');
+                break;
+            case 'global':
+                switchTab('global');
+                break;
+            case 'chat':
+                if (id && friends[id]) {
+                    switchTab('personal');
+                    setTimeout(() => {
+                        window.openChat(id, 'friend');
+                    }, 500);
+                }
+                break;
+            case 'server':
+                if (id) {
+                    switchTab('global');
+                    setTimeout(async () => {
+                        const server = servers.find(s => s.id === id);
+                        if (server) {
+                            await openServerChat(server);
+                        }
+                    }, 500);
+                }
+                break;
+            case 'friend-requests':
+                switchTab('personal');
+                setTimeout(() => {
+                    window.showFriendRequestsModal();
+                }, 500);
+                break;
+            case 'messages':
+                switchTab('personal');
+                break;
+            default:
+                switchTab('personal');
+                break;
+        }
+    };
+
+    window.addEventListener('popstate', (e) => {
+        if (e.state && e.state.path) {
+            handleRouting();
+        } else {
+            ui.chatView.classList.add('hidden');
+            ui.welcomeScreen.classList.remove('hidden');
+            currentChatFriend = null;
+            currentServer = null;
+        }
+    });
+
+    setTimeout(() => {
+        if (currentUser) {
+            handleRouting();
+        }
+    }, 1500);
     setTimeout(addFileButton, 500);
 });
