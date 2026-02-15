@@ -1478,7 +1478,9 @@ select option {
 #settings-modal-body::after {
     content: '';
     position: fixed;
-    inset: 0 0 auto 0;
+    top: env(safe-area-inset-top, 0);
+    left: 0;
+    right: 0;
     height: 140px;
     background: linear-gradient(to bottom,
             color-mix(in srgb, var(--primary-text) 47.5%, transparent) 0%,
