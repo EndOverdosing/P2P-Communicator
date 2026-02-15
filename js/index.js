@@ -165,6 +165,13 @@ document.addEventListener('DOMContentLoaded', () => {
         readReceipts: true
     };
 
+    const updateThemeColor = () => {
+        let themeMetaTag = document.querySelector('meta[name="theme-color"]');
+        if (themeMetaTag) {
+            themeMetaTag.setAttribute('content', userSettings.theme === 'dark' ? '#000000' : '#ffffff');
+        }
+    };
+
     function closeAllModals() {
         ui.modalContainer.classList.add('hidden');
         ui.addFriendModal?.classList.add('hidden');
@@ -943,6 +950,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const applySettings = () => {
         document.documentElement.setAttribute('data-theme', userSettings.theme);
         document.body.setAttribute('data-font-size', userSettings.fontSize);
+        updateThemeColor();
 
         ui.themeToggle.checked = userSettings.theme === 'dark';
         ui.fontSizeSelect.value = userSettings.fontSize;
@@ -4737,7 +4745,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const showSettingsModal = () => {
         let themeMetaTag = document.querySelector('meta[name="theme-color"]');
         if (themeMetaTag) {
-            themeMetaTag.setAttribute('content', 'transparent');
+            themeMetaTag.setAttribute('content', userSettings.theme === 'dark' ? '#000000' : '#ffffff');
         }
 
         ui.settingsModalContainer.classList.add('visible');
