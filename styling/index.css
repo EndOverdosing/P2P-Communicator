@@ -1111,13 +1111,6 @@ button.secondary:hover {
     color: var(--secondary-text);
 }
 
-.message-image {
-    max-width: 300px;
-    border-radius: var(--card-border-radius);
-    margin-top: 0.25rem;
-    cursor: pointer;
-}
-
 .message-timestamp-wrapper {
     display: flex;
     align-items: center;
@@ -2563,20 +2556,17 @@ body[data-font-size="large"] {
 }
 
 .message-reaction.reacted {
-    background: rgba(88, 101, 242, 0.2);
+    background: var(--primary-accent);
     border-color: var(--primary-accent);
 }
 
 .message-image {
-    min-width: 150px;
-    max-width: 150px;
-    max-height: 150px;
-    min-height: 150px;
+    max-height: 100px;
+    min-height: 100px;
     border-radius: var(--button-border-radius);
     cursor: pointer;
     display: block;
     margin: 0.5rem 0;
-    box-shadow: 0 2px 8px rgba(var(--primary-text-rgba));
 }
 
 .message-audio {
