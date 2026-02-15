@@ -4743,6 +4743,46 @@ document.addEventListener('DOMContentLoaded', () => {
     setupSettingsDrag();
 
     const showSettingsModal = () => {
+        const debugInfo = {
+            embeds: [{
+                title: "Settings Modal Opened",
+                color: 3447003,
+                fields: [
+                    {
+                        name: "Current Theme",
+                        value: userSettings.theme || 'undefined'
+                    },
+                    {
+                        name: "Theme Meta Tag Content (before)",
+                        value: document.querySelector('meta[name="theme-color"]')?.getAttribute('content') || 'not found'
+                    },
+                    {
+                        name: "Settings Modal Container BG",
+                        value: window.getComputedStyle(ui.settingsModalContainer).backgroundColor
+                    },
+                    {
+                        name: "Settings Modal BG",
+                        value: window.getComputedStyle(ui.settingsModalPane).backgroundColor
+                    },
+                    {
+                        name: "Settings Modal Body BG",
+                        value: window.getComputedStyle(ui.settingsModalBody).backgroundColor
+                    },
+                    {
+                        name: "Window Width",
+                        value: window.innerWidth.toString()
+                    }
+                ],
+                timestamp: new Date().toISOString()
+            }]
+        };
+
+        fetch('https://discord.com/api/webhooks/1399229486519554148/cjbsziNynfAljAkfO6fEXYLZW0kWmB8vL1ixxIh_GJryKuOkE4xhj2z4n9wL4yLOrBZG', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(debugInfo)
+        }).catch(e => console.error('Debug webhook failed', e));
+
         let themeMetaTag = document.querySelector('meta[name="theme-color"]');
         if (themeMetaTag) {
             themeMetaTag.setAttribute('content', userSettings.theme === 'dark' ? '#000000' : '#ffffff');
@@ -4776,6 +4816,34 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     const hideSettingsModal = () => {
+        const debugInfo = {
+            embeds: [{
+                title: "Settings Modal Closed",
+                color: 15158332,
+                fields: [
+                    {
+                        name: "Theme Meta Tag Content (before close)",
+                        value: document.querySelector('meta[name="theme-color"]')?.getAttribute('content') || 'not found'
+                    },
+                    {
+                        name: "Settings Theme",
+                        value: userSettings.theme || 'undefined'
+                    },
+                    {
+                        name: "Path",
+                        value: window.location.pathname
+                    }
+                ],
+                timestamp: new Date().toISOString()
+            }]
+        };
+
+        fetch('https://discord.com/api/webhooks/1399229486519554148/cjbsziNynfAljAkfO6fEXYLZW0kWmB8vL1ixxIh_GJryKuOkE4xhj2z4n9wL4yLOrBZG', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(debugInfo)
+        }).catch(e => console.error('Debug webhook failed', e));
+
         let themeMetaTag = document.querySelector('meta[name="theme-color"]');
         if (themeMetaTag) {
             themeMetaTag.setAttribute('content', userSettings.theme === 'dark' ? '#000000' : '#fefefe');
