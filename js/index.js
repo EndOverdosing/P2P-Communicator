@@ -4822,6 +4822,11 @@ document.addEventListener('DOMContentLoaded', () => {
             themeMetaTag.setAttribute('content', userSettings.theme === 'dark' ? '#000000' : '#ffffff');
         }
 
+        let statusBarMeta = document.querySelector('meta[name="apple-mobile-web-app-status-bar-style"]');
+        if (statusBarMeta) {
+            statusBarMeta.setAttribute('content', 'black');
+        }
+
         ui.settingsModalContainer.classList.add('visible');
         if (window.innerWidth <= 768) {
             setTimeout(() => {
@@ -4885,6 +4890,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (window.location.pathname === '/settings') {
             updateURLPath('personal');
+        }
+
+        let statusBarMeta = document.querySelector('meta[name="apple-mobile-web-app-status-bar-style"]');
+        if (statusBarMeta) {
+            statusBarMeta.setAttribute('content', 'black-translucent');
         }
 
         ui.settingsModalPane.classList.remove('visible');
