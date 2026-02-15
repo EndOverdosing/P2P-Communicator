@@ -4618,14 +4618,14 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         video.style.cssText = `
-        width: 100%;
-        height: 100%;
-        object-fit: cover;
-        display: block;
-        background: var(--primary-bg);
-        -webkit-transform: translateZ(0);
-        transform: translateZ(0);
-    `;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+    background: var(--primary-bg);
+    -webkit-transform: translateZ(0);
+    transform: translateZ(0);
+`;
 
         video.onloadedmetadata = () => {
             video.play().then(() => {
@@ -4641,9 +4641,9 @@ document.addEventListener('DOMContentLoaded', () => {
         const placeholder = document.createElement('div');
         placeholder.className = 'video-off-placeholder';
         placeholder.innerHTML = `
-        <div class="avatar large-avatar">${user.username[0].toUpperCase()}</div>
-        <span>${user.username}</span>
-    `;
+    <div class="avatar large-avatar">${user.username[0].toUpperCase()}</div>
+    <span>${user.username}</span>
+`;
 
         const nameTag = document.createElement('div');
         nameTag.className = 'participant-name';
@@ -4652,6 +4652,17 @@ document.addEventListener('DOMContentLoaded', () => {
         tile.appendChild(video);
         tile.appendChild(placeholder);
         tile.appendChild(nameTag);
+
+        if (type === 'local' && isMobileDevice()) {
+            const flipBtn = document.createElement('button');
+            flipBtn.className = 'flip-camera-btn';
+            flipBtn.innerHTML = '<i class="fa-solid fa-camera-rotate"></i>';
+            flipBtn.onclick = (e) => {
+                e.stopPropagation();
+                switchCamera();
+            };
+            tile.appendChild(flipBtn);
+        }
 
         tile.addEventListener('click', () => {
             tile.classList.toggle('fullscreen');
@@ -4885,12 +4896,52 @@ document.addEventListener('DOMContentLoaded', () => {
         return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
     };
 
+    const switchCamera = async () => {
+        if (!localStream) return;
+
+        const videoTrack = localStream.getVideoTracks()[0];
+        const currentFacingMode = videoTrack.getSettings().facingMode;
+        const newFacingMode = currentFacingMode === 'user' ? 'environment' : 'user';
+
+        try {
+            const newStream = await navigator.mediaDevices.getUserMedia({
+                video: {
+                    facingMode: newFacingMode,
+                    width: { ideal: 1280 },
+                    height: { ideal: 720 }
+                },
+                audio: false
+            });
+
+            const newVideoTrack = newStream.getVideoTracks()[0];
+            const sender = mediaConnection.peerConnection.getSenders().find(s => s.track && s.track.kind === 'video');
+
+            if (sender) {
+                await sender.replaceTrack(newVideoTrack);
+            }
+
+            videoTrack.stop();
+            localStream.removeTrack(videoTrack);
+            localStream.addTrack(newVideoTrack);
+
+            const localVideo = document.querySelector('#local-video video');
+            if (localVideo) {
+                localVideo.srcObject = localStream;
+            }
+        } catch (error) {
+            showInfoModal('Error', 'Could not switch camera. Please try again.');
+        }
+    };
+
     const getMobileScreenShareStream = async () => {
         try {
-            // Try to get camera with rear camera first (better for presenting content)
+            const videoTrack = localStream.getVideoTracks()[0];
+            const currentFacingMode = videoTrack.getSettings().facingMode;
+            const newFacingMode = currentFacingMode === 'user' ? 'environment' : 'user';
+
             const constraints = {
                 video: {
-                    facingMode: 'environment',
+                    facingMode: newFacingMode,
                     width: { ideal: 1920 },
                     height: { ideal: 1080 }
                 },
@@ -4900,7 +4951,6 @@ document.addEventListener('DOMContentLoaded', () => {
             const stream = await navigator.mediaDevices.getUserMedia(constraints);
             return stream;
         } catch (error) {
-            // Fallback to front camera
             try {
                 const fallbackConstraints = {
                     video: {
@@ -4969,11 +5019,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 let shareType;
 
                 if (isMobileDevice()) {
-                    // Mobile device - use camera as screen share
                     screenStream = await getMobileScreenShareStream();
                     shareType = 'camera';
                 } else {
-                    // Desktop - use actual screen sharing
                     screenStream = await getDesktopScreenShareStream();
                     shareType = 'screen';
                 }
@@ -4996,10 +5044,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 callState.isScreenSharing = true;
                 ui.shareScreenBtn.classList.add('active');
 
-                // Show appropriate message based on share type
-                if (shareType === 'camera') {
-                    showInfoModal('Camera Share Started', 'Using camera to share content. Point your camera at what you want to share.');
-                } else {
+                if (shareType === 'screen') {
                     showInfoModal('Screen Share Started', 'Your screen is now being shared.');
                 }
 

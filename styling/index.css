@@ -2091,6 +2091,34 @@ select option {
     -webkit-backface-visibility: hidden;
 }
 
+.flip-camera-btn {
+    position: absolute;
+    bottom: 1rem;
+    right: 1rem;
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    background: var(--primary-accent);
+    color: var(--primary-text);
+    border: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.9rem;
+    cursor: pointer;
+    z-index: 10;
+    transition: var(--transition-fast);
+    padding: 0;
+}
+
+.flip-camera-btn:active {
+    transform: scale(0.95);
+}
+
+.participant-tile.fullscreen .flip-camera-btn {
+    bottom: 6rem;
+}
+
 .participant-tile .video-off-placeholder {
     position: absolute;
     top: 0;
