@@ -4179,7 +4179,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         const remoteVideoElement = remoteTile.querySelector('video');
                         if (remoteVideoElement && document.body.contains(remoteVideoElement)) {
                             if (enabled) {
-                                remoteVideoElement.play().catch(e => {});
+                                remoteVideoElement.play().catch(e => { });
                             } else {
                                 remoteVideoElement.pause();
                             }
@@ -4633,7 +4633,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }).catch(err => {
                 if (!video.muted && type === 'remote') {
                     video.muted = true;
-                    video.play().catch(e => {});
+                    video.play().catch(e => { });
                 }
             });
         };
@@ -4881,18 +4881,81 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
+    const isMobileDevice = () => {
+        return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+    };
+
+    const getMobileScreenShareStream = async () => {
+        try {
+            // Try to get camera with rear camera first (better for presenting content)
+            const constraints = {
+                video: {
+                    facingMode: 'environment',
+                    width: { ideal: 1920 },
+                    height: { ideal: 1080 }
+                },
+                audio: false
+            };
+
+            const stream = await navigator.mediaDevices.getUserMedia(constraints);
+            return stream;
+        } catch (error) {
+            // Fallback to front camera
+            try {
+                const fallbackConstraints = {
+                    video: {
+                        facingMode: 'user',
+                        width: { ideal: 1280 },
+                        height: { ideal: 720 }
+                    },
+                    audio: false
+                };
+
+                const stream = await navigator.mediaDevices.getUserMedia(fallbackConstraints);
+                return stream;
+            } catch (fallbackError) {
+                throw new Error('Camera access denied or not available');
+            }
+        }
+    };
+
+    const getDesktopScreenShareStream = async () => {
+        try {
+            const stream = await navigator.mediaDevices.getDisplayMedia({
+                video: {
+                    cursor: 'always',
+                    displaySurface: 'monitor'
+                },
+                audio: false
+            });
+            return stream;
+        } catch (error) {
+            throw new Error('Screen sharing not available or permission denied');
+        }
+    };
+
     ui.shareScreenBtn.onclick = async () => {
         if (callState.isScreenSharing) {
             try {
-                const cameraStream = await navigator.mediaDevices.getUserMedia({ video: true });
+                const cameraStream = await navigator.mediaDevices.getUserMedia({
+                    video: {
+                        width: { ideal: 1280 },
+                        height: { ideal: 720 },
+                        facingMode: 'user'
+                    },
+                    audio: false
+                });
                 const videoTrack = cameraStream.getVideoTracks()[0];
                 const sender = mediaConnection.peerConnection.getSenders().find(s => s.track && s.track.kind === 'video');
                 if (sender) {
                     await sender.replaceTrack(videoTrack);
                 }
                 if (localStream) {
-                    localStream.getVideoTracks()[0].stop();
-                    localStream.removeTrack(localStream.getVideoTracks()[0]);
+                    const currentVideoTrack = localStream.getVideoTracks()[0];
+                    if (currentVideoTrack) {
+                        currentVideoTrack.stop();
+                        localStream.removeTrack(currentVideoTrack);
+                    }
                     localStream.addTrack(videoTrack);
                 }
                 callState.isScreenSharing = false;
@@ -4902,7 +4965,19 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         } else {
             try {
-                const screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true });
+                let screenStream;
+                let shareType;
+
+                if (isMobileDevice()) {
+                    // Mobile device - use camera as screen share
+                    screenStream = await getMobileScreenShareStream();
+                    shareType = 'camera';
+                } else {
+                    // Desktop - use actual screen sharing
+                    screenStream = await getDesktopScreenShareStream();
+                    shareType = 'screen';
+                }
+
                 const screenTrack = screenStream.getVideoTracks()[0];
 
                 const sender = mediaConnection.peerConnection.getSenders().find(s => s.track && s.track.kind === 'video');
@@ -4912,23 +4987,42 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 if (localStream) {
                     const oldTrack = localStream.getVideoTracks()[0];
-                    localStream.removeTrack(oldTrack);
+                    if (oldTrack) {
+                        localStream.removeTrack(oldTrack);
+                    }
                     localStream.addTrack(screenTrack);
                 }
 
                 callState.isScreenSharing = true;
                 ui.shareScreenBtn.classList.add('active');
 
+                // Show appropriate message based on share type
+                if (shareType === 'camera') {
+                    showInfoModal('Camera Share Started', 'Using camera to share content. Point your camera at what you want to share.');
+                } else {
+                    showInfoModal('Screen Share Started', 'Your screen is now being shared.');
+                }
+
                 screenTrack.onended = async () => {
                     try {
-                        const cameraStream = await navigator.mediaDevices.getUserMedia({ video: true });
+                        const cameraStream = await navigator.mediaDevices.getUserMedia({
+                            video: {
+                                width: { ideal: 1280 },
+                                height: { ideal: 720 },
+                                facingMode: 'user'
+                            },
+                            audio: false
+                        });
                         const videoTrack = cameraStream.getVideoTracks()[0];
                         const sender = mediaConnection.peerConnection.getSenders().find(s => s.track && s.track.kind === 'video');
                         if (sender) {
                             await sender.replaceTrack(videoTrack);
                         }
                         if (localStream) {
-                            localStream.removeTrack(localStream.getVideoTracks()[0]);
+                            const currentVideoTrack = localStream.getVideoTracks()[0];
+                            if (currentVideoTrack) {
+                                localStream.removeTrack(currentVideoTrack);
+                            }
                             localStream.addTrack(videoTrack);
                         }
                         callState.isScreenSharing = false;
@@ -4937,7 +5031,28 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                 };
             } catch (error) {
-                showInfoModal('Screen Share Error', 'Could not start screen sharing. Please try again.');
+                let errorMessage = 'Could not start screen sharing. Please try again.';
+                let errorTitle = 'Screen Share Error';
+
+                if (isMobileDevice()) {
+                    if (error.message.includes('Camera access denied')) {
+                        errorMessage = 'Camera access is required for screen sharing on mobile devices. Please allow camera access and try again.';
+                        errorTitle = 'Camera Access Required';
+                    } else if (error.message.includes('not available')) {
+                        errorMessage = 'Camera is not available on this device. Screen sharing requires camera access on mobile.';
+                        errorTitle = 'Camera Not Available';
+                    }
+                } else {
+                    if (error.message.includes('permission denied')) {
+                        errorMessage = 'Screen sharing permission was denied. Please allow screen sharing and try again.';
+                        errorTitle = 'Permission Denied';
+                    } else if (error.message.includes('not available')) {
+                        errorMessage = 'Screen sharing is not available in this browser. Please try using Chrome, Firefox, or Edge.';
+                        errorTitle = 'Browser Not Supported';
+                    }
+                }
+
+                showInfoModal(errorTitle, errorMessage);
             }
         }
     };
