@@ -1814,7 +1814,7 @@ document.addEventListener('DOMContentLoaded', () => {
                                 </div>
                                 <div class="friend-info">
                                     <div class="friend-name">${friend.username}</div>
-                                    <div class="friend-status">${conv.lastMessage ? (conv.lastMessage.sender_id === currentUser.id ? 'You: ' : '') + (conv.lastMessage.content?.substring(0, 30) || 'Sent a file') : 'No messages yet'}</div>
+                                    <div class="friend-status">${conv.lastMessage ? (conv.lastMessage.call_duration !== null && conv.lastMessage.call_duration !== undefined ? (conv.lastMessage.call_duration === 0 ? 'Missed call' : `Call • ${formatCallDuration(conv.lastMessage.call_duration)}`) : (conv.lastMessage.sender_id === currentUser.id ? 'You: ' : '') + (conv.lastMessage.content?.substring(0, 30) || 'Sent a file')) : 'No messages yet'}</div>
                                 </div>
                             `;
 
@@ -2996,7 +2996,10 @@ document.addEventListener('DOMContentLoaded', () => {
         if (seconds === 0) return 'Missed';
         const mins = Math.floor(seconds / 60);
         const secs = seconds % 60;
-        return `${mins}:${secs.toString().padStart(2, '0')}`;
+        if (mins === 0) {
+            return `${secs}s`;
+        }
+        return `${mins}m ${secs}s`;
     };
 
     const escapeHtml = (text) => {
@@ -5080,10 +5083,22 @@ document.addEventListener('DOMContentLoaded', () => {
             const diffY = currentY - startY;
 
             if (diffY > 100) {
+                ui.settingsModalContainer.classList.add('hiding');
                 ui.settingsModalPane.style.transform = 'translateY(100%)';
                 setTimeout(() => {
-                    hideSettingsModal();
+                    ui.settingsModalContainer.classList.remove('visible', 'hiding');
                     ui.settingsModalPane.style.transform = '';
+
+                    if (ui.settingsModalBody._scrollListener) {
+                        ui.settingsModalBody.removeEventListener('scroll', ui.settingsModalBody._scrollListener);
+                        delete ui.settingsModalBody._scrollListener;
+                    }
+
+                    document.documentElement.style.setProperty('--settings-modal-after-opacity', 1);
+
+                    if (window.location.pathname === '/settings') {
+                        updateURLPath('personal');
+                    }
                 }, 300);
             } else {
                 ui.settingsModalPane.style.transform = 'translateY(0)';
@@ -5164,7 +5179,23 @@ document.addEventListener('DOMContentLoaded', () => {
             updateURLPath('personal');
         }
 
-        ui.settingsModalPane.classList.remove('visible');
+        const isAlreadyAnimating = ui.settingsModalPane.style.transform === 'translateY(100%)';
+
+        if (window.innerWidth <= 768) {
+            if (!isAlreadyAnimating) {
+                ui.settingsModalPane.style.transform = 'translateY(100%)';
+            }
+
+            setTimeout(() => {
+                ui.settingsModalContainer.classList.remove('visible');
+
+                setTimeout(() => {
+                    ui.settingsModalPane.style.transform = '';
+                }, 300);
+            }, 300);
+        } else {
+            ui.settingsModalContainer.classList.remove('visible');
+        }
 
         if (ui.settingsModalBody._scrollListener) {
             ui.settingsModalBody.removeEventListener('scroll', ui.settingsModalBody._scrollListener);
@@ -5172,10 +5203,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         document.documentElement.style.setProperty('--settings-modal-after-opacity', 1);
-
-        setTimeout(() => {
-            ui.settingsModalContainer.classList.remove('visible');
-        }, 300);
     };
 
     const adjustTextareaHeight = () => {
