@@ -3680,7 +3680,7 @@ body[data-font-size="large"] {
     }
 
     #chat-header {
-        width: auto;
+        width: 100%;
     }
 
     #message-form {
