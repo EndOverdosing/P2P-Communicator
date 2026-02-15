@@ -26,9 +26,6 @@
     --island-bg: rgba(0, 0, 0, 0.97);
     --island-text: #ffffff;
     --base-font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-
-    --settings-gradient-start: rgba(0, 0, 0, 0.2);
-    --settings-gradient-end: rgba(0, 0, 0, 0.1);
 }
 
 :root[data-theme="dark"] {
@@ -58,9 +55,6 @@
     --base-bg: #000000;
     --island-bg: rgba(255, 255, 255, 0.97);
     --island-text: #000000;
-
-    --settings-gradient-start: rgba(255, 255, 255, 0.3);
-    --settings-gradient-end: rgba(255, 255, 255, 0.1);
 }
 
 @keyframes typing-bounce {
@@ -1481,6 +1475,38 @@ select option {
     background-color: transparent;
 }
 
+#settings-modal-body::after {
+    content: '';
+    position: fixed;
+    inset: 0 0 auto 0;
+    height: 140px;
+    background: linear-gradient(to bottom,
+            color-mix(in srgb, var(--primary-text) 47.5%, transparent) 0%,
+            color-mix(in srgb, var(--primary-text) 42.5%, transparent) 30%,
+            color-mix(in srgb, var(--primary-text) 27.5%, transparent) 60%,
+            color-mix(in srgb, var(--primary-text) 7.5%, transparent) 85%,
+            transparent 100%);
+    backdrop-filter: blur(48px) saturate(1.15);
+    -webkit-backdrop-filter: blur(48px) saturate(1.15);
+    mask: linear-gradient(to bottom,
+            var(--primary-text) 0%,
+            color-mix(in srgb, var(--primary-text) 45%, transparent) 40%,
+            color-mix(in srgb, var(--primary-text) 30%, transparent) 70%,
+            transparent 100%);
+    -webkit-mask: linear-gradient(to bottom,
+            var(--primary-text) 0%,
+            color-mix(in srgb, var(--primary-text) 45%, transparent) 40%,
+            color-mix(in srgb, var(--primary-text) 30%, transparent) 70%,
+            transparent 100%);
+    z-index: 1;
+    pointer-events: none;
+    will-change: opacity, transform;
+    -webkit-transform: translateZ(0);
+    transform: translateZ(0);
+    transition: opacity 0.3s ease-out;
+    opacity: var(--settings-modal-after-opacity, 1);
+}
+
 #settings-modal-container.visible {
     opacity: 1;
     pointer-events: auto;
@@ -2058,6 +2084,7 @@ select option {
     position: absolute;
     top: 0;
     left: 0;
+    z-index: 1;
     -webkit-transform: translateZ(0);
     transform: translateZ(0);
     backface-visibility: hidden;
@@ -2076,7 +2103,7 @@ select option {
     justify-content: center;
     gap: 1rem;
     background: var(--tertiary-bg);
-    z-index: 1;
+    z-index: 2;
 }
 
 .participant-tile.video-off .video-off-placeholder {
@@ -3964,4 +3991,15 @@ body[data-font-size="large"] {
         transform: scale(1);
         opacity: 1;
     }
+}
+
+#floating-call-indicator {
+    animation: pulse 2s infinite;
+}
+
+#floating-call-indicator:hover {
+    animation: none;
+    opacity: 1;
+    transform: scale(1.05);
+    transition: transform 0.2s ease;
 }

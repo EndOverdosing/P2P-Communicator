@@ -1385,6 +1385,10 @@ document.addEventListener('DOMContentLoaded', () => {
             .on('broadcast', { event: 'incoming_call' }, async (payload) => {
                 const callerData = payload.payload;
 
+                if (isInCall && incomingCallData?.from === callerData.callerId) {
+                    return;
+                }
+
                 if (isInCall) {
                     await channel.send({
                         type: 'broadcast',
@@ -1396,7 +1400,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     });
                     return;
                 }
-
                 incomingCallData = {
                     from: callerData.callerId,
                     peerId: callerData.callerPeerId,
@@ -1435,8 +1438,9 @@ document.addEventListener('DOMContentLoaded', () => {
             .on('broadcast', { event: 'call_accepted' }, async (payload) => {
                 if (activeCallInvite && payload.payload.acceptedBy === activeCallInvite.calleeId) {
                     const { acceptedBy, accepterPeerId } = payload.payload;
-                    await initiateCallConnection(acceptedBy, accepterPeerId);
+                    clearCallInvite();
                     hideOutgoingCallUI();
+                    await initiateCallConnection(acceptedBy, accepterPeerId);
                 }
             })
             .on('broadcast', { event: 'call_declined' }, async (payload) => {
@@ -1744,6 +1748,8 @@ document.addEventListener('DOMContentLoaded', () => {
     let isUpdatingConversations = false;
     let renderConversationsTimeout = null;
     let isRenderingConversations = false;
+
+    let remoteVideoStates = {};
 
     const renderConversationsList = () => {
         if (isRenderingConversations) {
@@ -3538,6 +3544,13 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     ui.backToFriendsBtn.onclick = () => {
+        if (isInCall) {
+            ui.chatView.classList.add('hidden');
+            ui.welcomeScreen.classList.remove('hidden');
+            createFloatingCallIndicator();
+            return;
+        }
+
         currentServer = null;
         currentChatFriend = null;
         currentChatType = 'friend';
@@ -3550,6 +3563,40 @@ document.addEventListener('DOMContentLoaded', () => {
         if (window.innerWidth <= 768) {
             ui.navbarInSidebar.classList.remove('hidden');
         }
+    };
+
+    const createFloatingCallIndicator = () => {
+        const existing = document.getElementById('floating-call-indicator');
+        if (existing) return;
+
+        const indicator = document.createElement('div');
+        indicator.id = 'floating-call-indicator';
+        indicator.style.cssText = `
+        position: fixed;
+        top: 1rem;
+        right: 1rem;
+        background: var(--success);
+        color: white;
+        padding: 1rem;
+        border-radius: var(--card-border-radius);
+        z-index: 9999;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        animation: pulse 2s infinite;
+    `;
+        indicator.innerHTML = `
+        <i class="fa-solid fa-phone"></i>
+        <span>Call in progress - Click to return</span>
+    `;
+        indicator.onclick = () => {
+            ui.callSection.classList.remove('hidden');
+            ui.chatView.classList.add('hidden');
+            ui.welcomeScreen.classList.add('hidden');
+            indicator.remove();
+        };
+        document.body.appendChild(indicator);
     };
 
     ui.viewProfileBtn.onclick = async () => {
@@ -3958,20 +4005,40 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     const handleIncomingCall = (call) => {
+        if (isInCall && incomingCallData && call.metadata?.from === incomingCallData.from) {
+            mediaConnection = call;
+
+            if (localStream) {
+                call.answer(localStream);
+
+                let streamReceived = false;
+                call.on('stream', (remoteStream) => {
+                    if (streamReceived) {
+                        return;
+                    }
+                    streamReceived = true;
+                    const callerId = call.metadata.from;
+                    const existingRemote = document.getElementById('remote-video');
+                    if (!existingRemote) {
+                        addVideoStream('remote', remoteStream, friends[callerId]);
+                    }
+                });
+            }
+            return;
+        }
+
         if (isInCall && call.metadata?.from !== incomingCallData?.from) {
             call.close();
             return;
         }
-
-        if (isInCall && call.metadata?.from === incomingCallData?.from) {
-            mediaConnection = call;
-            return;
-        }
-
         mediaConnection = call;
 
-        incomingCallData = call.metadata;
-
+        incomingCallData = {
+            from: call.metadata.from,
+            peerId: call.peer,
+            callerName: call.metadata.callerName,
+            callerAvatar: call.metadata.callerAvatar
+        };
         const callerId = incomingCallData.from;
         const caller = friends[callerId];
 
@@ -3987,6 +4054,19 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         showModal(ui.incomingCallModal);
+
+        incomingCallTimeout = setTimeout(() => {
+            if (!isInCall && incomingCallData) {
+                hideModal();
+                ui.incomingCallAudio.pause();
+                ui.incomingCallAudio.currentTime = 0;
+                incomingCallData = null;
+                if (mediaConnection) {
+                    mediaConnection.close();
+                    mediaConnection = null;
+                }
+            }
+        }, 30000);
 
         call.on('close', () => {
             if (isInCall) {
@@ -4004,17 +4084,37 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     ui.acceptCallBtn.onclick = async () => {
+        if (!incomingCallData) {
+            return;
+        }
+
         isInCall = true;
 
         hideModal();
         ui.incomingCallAudio.pause();
         ui.incomingCallAudio.currentTime = 0;
 
+        if (incomingCallTimeout) {
+            clearTimeout(incomingCallTimeout);
+            incomingCallTimeout = null;
+        }
+
         try {
-            const callChannel = supabase.channel(`call-invite-${currentUser.id}`, {
-                config: {
-                    broadcast: { self: false, ack: true }
+            localStream = await navigator.mediaDevices.getUserMedia({
+                video: {
+                    width: { ideal: 1280 },
+                    height: { ideal: 720 },
+                    facingMode: 'user'
+                },
+                audio: {
+                    echoCancellation: true,
+                    noiseSuppression: true,
+                    autoGainControl: true
                 }
+            });
+            const callerId = incomingCallData.from;
+            const callChannel = supabase.channel(`call-invite-${callerId}`, {
+                config: { broadcast: { self: false } }
             });
 
             await new Promise((resolve) => {
@@ -4034,8 +4134,68 @@ document.addEventListener('DOMContentLoaded', () => {
                     timestamp: Date.now()
                 }
             });
+            ui.callSection.classList.remove('hidden');
+            ui.chatView.classList.add('hidden');
+            ui.videoGrid.innerHTML = '';
 
-        } catch (err) {
+            addVideoStream('local', localStream, currentUser);
+
+            if (mediaConnection) {
+                mediaConnection.answer(localStream);
+
+                mediaConnection.on('stream', (remoteStream) => {
+                    addVideoStream('remote', remoteStream, friends[callerId]);
+                });
+            } else {
+            }
+
+            const userId1 = currentUser.id < callerId ? currentUser.id : callerId;
+            const userId2 = currentUser.id < callerId ? callerId : currentUser.id;
+            const sessionChannelName = `call-session-${userId1}-${userId2}`;
+            const sessionChannel = supabase.channel(sessionChannelName);
+            await sessionChannel.subscribe();
+
+            sessionChannel.on('broadcast', { event: 'track_state_change' }, (payload) => {
+                const { trackType, enabled, fromUser } = payload.payload;
+                if (trackType === 'video') {
+                    if (fromUser) {
+                        remoteVideoStates[fromUser] = enabled;
+                    } else {
+                    }
+
+                    const remoteTile = document.getElementById('remote-video');
+                    if (remoteTile) {
+                        if (enabled) {
+                            remoteTile.classList.remove('video-off');
+                        } else {
+                            remoteTile.classList.add('video-off');
+                        }
+
+                        updateVideoState(remoteTile.querySelector('video'), 'remote', {
+                            id: fromUser,
+                            username: remoteTile.querySelector('.participant-name')?.textContent || 'Remote User'
+                        });
+
+                        const remoteVideoElement = remoteTile.querySelector('video');
+                        if (remoteVideoElement && document.body.contains(remoteVideoElement)) {
+                            if (enabled) {
+                                remoteVideoElement.play().catch(e => {});
+                            } else {
+                                remoteVideoElement.pause();
+                            }
+                        }
+                    } else {
+                    }
+                }
+            });
+
+            sessionChannel.on('broadcast', { event: 'call_ended' }, () => {
+                endCall();
+            });
+
+            subscriptions.push(sessionChannel);
+
+        } catch (error) {
             isInCall = false;
             endCall();
             showInfoModal('Call Error', 'Failed to start call. Please try again.');
@@ -4052,8 +4212,9 @@ document.addEventListener('DOMContentLoaded', () => {
             mediaConnection = null;
         }
 
-        const callChannel = supabase.channel(`call-invite-${currentUser.id}`);
-        await callChannel.subscribe();
+        const userId1 = currentUser.id < calleeId ? currentUser.id : calleeId;
+        const userId2 = currentUser.id < calleeId ? calleeId : currentUser.id;
+        const callChannel = supabase.channel(`call-session-${userId1}-${userId2}`);
 
         await callChannel.send({
             type: 'broadcast',
@@ -4228,19 +4389,21 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const initiateCallConnection = async (calleeId, calleePeerId) => {
         try {
-            localStream = await navigator.mediaDevices.getUserMedia({
-                video: {
-                    width: { ideal: 1280 },
-                    height: { ideal: 720 },
-                    facingMode: 'user'
-                },
-                audio: {
-                    echoCancellation: true,
-                    noiseSuppression: true,
-                    autoGainControl: true
-                }
-            });
-
+            if (!localStream) {
+                localStream = await navigator.mediaDevices.getUserMedia({
+                    video: {
+                        width: { ideal: 1280 },
+                        height: { ideal: 720 },
+                        facingMode: 'user'
+                    },
+                    audio: {
+                        echoCancellation: true,
+                        noiseSuppression: true,
+                        autoGainControl: true
+                    }
+                });
+            } else {
+            }
             const call = peer.call(calleePeerId, localStream, {
                 metadata: {
                     from: currentUser.id,
@@ -4248,10 +4411,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             });
 
+            if (!call) {
+                throw new Error('Failed to create call');
+            }
+
             mediaConnection = call;
             let callEstablished = false;
             const startTime = Date.now();
-
             const connectionTimeout = setTimeout(() => {
                 if (!callEstablished) {
                     call.close();
@@ -4265,15 +4431,22 @@ document.addEventListener('DOMContentLoaded', () => {
             }, 30000);
 
             call.on('stream', (remoteStream) => {
+                if (callEstablished) {
+                    return;
+                }
+
                 callEstablished = true;
                 clearTimeout(connectionTimeout);
                 hideOutgoingCallUI();
+
                 ui.callSection.classList.remove('hidden');
                 ui.chatView.classList.add('hidden');
+                ui.welcomeScreen.classList.add('hidden');
                 isInCall = true;
+
                 ui.videoGrid.innerHTML = '';
                 addVideoStream('local', localStream, currentUser);
-                addVideoStream('remote', remoteStream, currentChatFriend);
+                addVideoStream('remote', remoteStream, friends[calleeId]);
             });
 
             call.on('close', async () => {
@@ -4310,15 +4483,44 @@ document.addEventListener('DOMContentLoaded', () => {
                 };
             }
 
-            const callChannel = supabase.channel(`call-session-${currentUser.id}-${calleeId}`);
+            const userId1 = currentUser.id < calleeId ? currentUser.id : calleeId;
+            const userId2 = currentUser.id < calleeId ? calleeId : currentUser.id;
+            const callChannel = supabase.channel(`call-session-${userId1}-${userId2}`);
             await callChannel.subscribe();
 
             callChannel.on('broadcast', { event: 'track_state_change' }, (payload) => {
-                const { trackType, enabled } = payload.payload;
+                const { trackType, enabled, fromUser } = payload.payload;
                 if (trackType === 'video') {
-                    updateVideoState('remote', enabled);
+                    if (fromUser) {
+                        remoteVideoStates[fromUser] = enabled;
+                    } else {
+                    }
+
+                    const remoteTile = document.getElementById('remote-video');
+                    if (remoteTile) {
+                        if (enabled) {
+                            remoteTile.classList.remove('video-off');
+                        } else {
+                            remoteTile.classList.add('video-off');
+                        }
+                    } else {
+                    }
                 }
             });
+
+            callChannel.on('broadcast', { event: 'call_ended' }, () => {
+                hideOutgoingCallUI();
+                endCall();
+            });
+
+            subscriptions.push(callChannel);
+
+            callChannel.on('broadcast', { event: 'call_ended' }, () => {
+                hideOutgoingCallUI();
+                endCall();
+            });
+
+            subscriptions.push(callChannel);
 
             callChannel.on('broadcast', { event: 'call_ended' }, () => {
                 hideOutgoingCallUI();
@@ -4368,22 +4570,40 @@ document.addEventListener('DOMContentLoaded', () => {
     const addVideoStream = (type, stream, user) => {
         const videoTracks = stream.getVideoTracks();
         const audioTracks = stream.getAudioTracks();
+        let track = null;
+        if (videoTracks.length > 0) {
+            track = videoTracks[0];
+        }
 
         const existingTile = document.getElementById(`${type}-video`);
         if (existingTile) {
             existingTile.remove();
         }
 
+        const pollingInterval = setInterval(() => {
+            if (!track) {
+                clearInterval(pollingInterval);
+                return;
+            }
+            const currentEnabled = track.enabled;
+            if (track._lastEnabled !== currentEnabled) {
+                track._lastEnabled = currentEnabled;
+
+                if (type === 'local') {
+                    checkVideoState();
+                }
+            }
+        }, 100);
+
         const tile = document.createElement('div');
         tile.className = 'participant-tile';
         tile.id = `${type}-video`;
         tile.dataset.type = type;
         tile.dataset.streamId = stream.id;
+        tile.dataset.userId = user.id;
 
         const video = document.createElement('video');
-
         video.srcObject = stream;
-
         video.autoplay = true;
         video.playsInline = true;
         video.setAttribute('playsinline', '');
@@ -4407,17 +4627,16 @@ document.addEventListener('DOMContentLoaded', () => {
         transform: translateZ(0);
     `;
 
-        const playPromise = video.play();
-        if (playPromise !== undefined) {
-            playPromise
-                .then(() => {
-                })
-                .catch(err => {
-                    if (!video.muted && type === 'remote') {
-                        video.muted = true;
-                    }
-                });
-        }
+        video.onloadedmetadata = () => {
+            video.play().then(() => {
+                checkVideoState();
+            }).catch(err => {
+                if (!video.muted && type === 'remote') {
+                    video.muted = true;
+                    video.play().catch(e => {});
+                }
+            });
+        };
 
         const placeholder = document.createElement('div');
         placeholder.className = 'video-off-placeholder';
@@ -4439,35 +4658,55 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
         ui.videoGrid.appendChild(tile);
-
-        const updateVideoState = () => {
+        const checkVideoState = () => {
             const videoTracks = stream.getVideoTracks();
-
             if (videoTracks.length === 0) {
                 tile.classList.add('video-off');
                 return;
             }
 
             const track = videoTracks[0];
-            const isVideoOff = track.muted || !track.enabled || track.readyState !== 'live';
+            const isEnabled = track.enabled;
+            const isMuted = track.muted;
+            const readyState = track.readyState;
+            const videoWidth = video.videoWidth;
+            const videoHeight = video.videoHeight;
+            let isVideoOff;
 
+            if (type === 'remote') {
+                const otherUserId = user.id;
+                const remoteState = remoteVideoStates[otherUserId];
+                if (remoteState !== undefined) {
+                    isVideoOff = !remoteState;
+                } else {
+                    isVideoOff = !isEnabled || readyState !== 'live';
+                }
+            } else {
+                isVideoOff = !isEnabled || readyState !== 'live';
+            }
             if (isVideoOff) {
                 tile.classList.add('video-off');
             } else {
                 tile.classList.remove('video-off');
-                const playAttempt = video.play();
-                if (playAttempt !== undefined) {
-                    playAttempt.catch(err => {
-                    });
-                }
             }
 
+            const placeholder = tile.querySelector('.video-off-placeholder');
+            if (placeholder) {
+                const computedStyle = window.getComputedStyle(placeholder);
+            }
+        };
+
+        const updateVideoState = () => {
+            checkVideoState();
         };
 
         if (videoTracks.length > 0) {
             const track = videoTracks[0];
+            track._lastEnabled = track.enabled;
 
-            updateVideoState();
+            setTimeout(() => {
+                checkVideoState();
+            }, 500);
 
             track.addEventListener('mute', () => {
                 updateVideoState();
@@ -4488,9 +4727,20 @@ document.addEventListener('DOMContentLoaded', () => {
             stream.addEventListener('addtrack', (e) => {
                 updateVideoState();
             });
+        } else {
+            tile.classList.add('video-off');
         }
 
+        video.addEventListener('loadeddata', () => {
+            checkVideoState();
+        });
+
+        video.addEventListener('playing', () => {
+            checkVideoState();
+        });
+
         setTimeout(() => {
+            checkVideoState();
         }, 1000);
     };
 
@@ -4509,10 +4759,18 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     const endCall = async () => {
+        remoteVideoStates = {};
+
         if (incomingCallTimeout) {
             clearTimeout(incomingCallTimeout);
             incomingCallTimeout = null;
         }
+
+        const floatingIndicator = document.getElementById('floating-call-indicator');
+        if (floatingIndicator) {
+            floatingIndicator.remove();
+        }
+
         if (localStream) {
             localStream.getTracks().forEach(track => track.stop());
             localStream = null;
@@ -4524,7 +4782,11 @@ document.addEventListener('DOMContentLoaded', () => {
             mediaConnection.close();
 
             if (otherUserId) {
-                const callChannel = supabase.channel(`call-session-${currentUser.id}-${otherUserId}`);
+                const userId1 = currentUser.id < otherUserId ? currentUser.id : otherUserId;
+                const userId2 = currentUser.id < otherUserId ? otherUserId : currentUser.id;
+                const sessionChannelName = `call-session-${userId1}-${userId2}`;
+
+                const callChannel = supabase.channel(sessionChannelName);
                 await callChannel.subscribe();
                 await callChannel.send({
                     type: 'broadcast',
@@ -4540,6 +4802,7 @@ document.addEventListener('DOMContentLoaded', () => {
         ui.callSection.classList.add('hidden');
         ui.chatView.classList.remove('hidden');
         isInCall = false;
+        incomingCallData = null;
         callState = { isMuted: false, isVideoEnabled: true, isScreenSharing: false };
 
         ui.muteBtn.classList.remove('danger');
@@ -4560,12 +4823,21 @@ document.addEventListener('DOMContentLoaded', () => {
 
     ui.toggleVideoBtn.onclick = async () => {
         callState.isVideoEnabled = !callState.isVideoEnabled;
-
         if (localStream) {
-            localStream.getVideoTracks().forEach(t => t.enabled = callState.isVideoEnabled);
+            localStream.getVideoTracks().forEach(t => {
+                t.enabled = callState.isVideoEnabled;
+            });
         }
 
-        updateVideoState('local', callState.isVideoEnabled);
+        const localTile = document.getElementById('local-video');
+        if (localTile) {
+            if (callState.isVideoEnabled) {
+                localTile.classList.remove('video-off');
+            } else {
+                localTile.classList.add('video-off');
+            }
+        }
+
         ui.toggleVideoBtn.classList.toggle('active', callState.isVideoEnabled);
         ui.toggleVideoBtn.innerHTML = callState.isVideoEnabled ?
             '<i class="fa-solid fa-video"></i>' :
@@ -4573,17 +4845,39 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const otherUserId = currentChatFriend?.id || incomingCallData?.from;
         if (otherUserId) {
-            const callChannel = supabase.channel(`call-session-${currentUser.id}-${otherUserId}`);
-            await callChannel.subscribe();
+            const userId1 = currentUser.id < otherUserId ? currentUser.id : otherUserId;
+            const userId2 = currentUser.id < otherUserId ? otherUserId : currentUser.id;
+            const channelName = `call-session-${userId1}-${userId2}`;
+
+            let callChannel = subscriptions.find(s => s.topic === `realtime:${channelName}`);
+
+            if (!callChannel) {
+                callChannel = supabase.channel(channelName);
+
+                const subscribePromise = new Promise((resolve) => {
+                    callChannel.subscribe((status) => {
+                        if (status === 'SUBSCRIBED') {
+                            resolve();
+                        }
+                    });
+                });
+
+                await subscribePromise;
+                subscriptions.push(callChannel);
+            } else {
+            }
+
             await callChannel.send({
                 type: 'broadcast',
                 event: 'track_state_change',
                 payload: {
                     trackType: 'video',
                     enabled: callState.isVideoEnabled,
-                    peerId: peer.id
+                    peerId: peer.id,
+                    fromUser: currentUser.id
                 }
             });
+        } else {
         }
     };
 
@@ -4735,11 +5029,6 @@ document.addEventListener('DOMContentLoaded', () => {
     setupSettingsDrag();
 
     const showSettingsModal = () => {
-        let themeMetaTag = document.querySelector('meta[name="theme-color"]');
-        if (themeMetaTag) {
-            themeMetaTag.setAttribute('content', '#000000');
-        }
-
         ui.settingsModalContainer.classList.add('visible');
         if (window.innerWidth <= 768) {
             setTimeout(() => {
@@ -4768,11 +5057,6 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     const hideSettingsModal = () => {
-        let themeMetaTag = document.querySelector('meta[name="theme-color"]');
-        if (themeMetaTag) {
-            themeMetaTag.setAttribute('content', userSettings.theme === 'dark' ? '#000000' : '#fefefe');
-        }
-
         if (window.location.pathname === '/settings') {
             updateURLPath('personal');
         }
