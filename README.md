@@ -1,4 +1,4 @@
-![Logo](/images/background.png)
+![Logo](/public/images/background.png)
 
 # Pylara Communicator
 
