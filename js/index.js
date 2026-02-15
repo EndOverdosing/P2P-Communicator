@@ -4743,9 +4743,12 @@ document.addEventListener('DOMContentLoaded', () => {
     setupSettingsDrag();
 
     const showSettingsModal = () => {
+        let themeMetaTag = document.querySelector('meta[name="theme-color"]');
+        const afterElement = window.getComputedStyle(ui.settingsModalBody, '::after');
+
         const debugInfo = {
             embeds: [{
-                title: "Settings Modal Opened",
+                title: "Settings Modal Opened - Enhanced Debug",
                 color: 3447003,
                 fields: [
                     {
@@ -4754,7 +4757,11 @@ document.addEventListener('DOMContentLoaded', () => {
                     },
                     {
                         name: "Theme Meta Tag Content (before)",
-                        value: document.querySelector('meta[name="theme-color"]')?.getAttribute('content') || 'not found'
+                        value: themeMetaTag?.getAttribute('content') || 'not found'
+                    },
+                    {
+                        name: "apple-mobile-web-app-status-bar-style",
+                        value: document.querySelector('meta[name="apple-mobile-web-app-status-bar-style"]')?.getAttribute('content') || 'not found'
                     },
                     {
                         name: "Settings Modal Container BG",
@@ -4769,8 +4776,36 @@ document.addEventListener('DOMContentLoaded', () => {
                         value: window.getComputedStyle(ui.settingsModalBody).backgroundColor
                     },
                     {
+                        name: "::after position",
+                        value: afterElement.position
+                    },
+                    {
+                        name: "::after top",
+                        value: afterElement.top
+                    },
+                    {
+                        name: "::after backdrop-filter",
+                        value: afterElement.backdropFilter || afterElement.webkitBackdropFilter || 'none'
+                    },
+                    {
+                        name: "::after background",
+                        value: afterElement.background.substring(0, 100)
+                    },
+                    {
+                        name: "Body z-index",
+                        value: window.getComputedStyle(ui.settingsModalBody).zIndex
+                    },
+                    {
+                        name: "Container z-index",
+                        value: window.getComputedStyle(ui.settingsModalContainer).zIndex
+                    },
+                    {
                         name: "Window Width",
                         value: window.innerWidth.toString()
+                    },
+                    {
+                        name: "safe-area-inset-top",
+                        value: getComputedStyle(document.documentElement).getPropertyValue('padding-top') || '0'
                     }
                 ],
                 timestamp: new Date().toISOString()
@@ -4783,7 +4818,6 @@ document.addEventListener('DOMContentLoaded', () => {
             body: JSON.stringify(debugInfo)
         }).catch(e => console.error('Debug webhook failed', e));
 
-        let themeMetaTag = document.querySelector('meta[name="theme-color"]');
         if (themeMetaTag) {
             themeMetaTag.setAttribute('content', userSettings.theme === 'dark' ? '#000000' : '#ffffff');
         }
