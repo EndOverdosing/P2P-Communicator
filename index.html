@@ -112,7 +112,6 @@
                         <button id="call-btn" class="personal-chat-only"><i class="fa-solid fa-video"></i></button>
                         <button id="server-info-btn" class="server-chat-only hidden"><i
                                 class="fa-solid fa-info-circle"></i></button>
-                        <button id="chat-options-btn"><i class="fa-solid fa-ellipsis-vertical"></i></button>
                     </div>
                 </header>
                 <div id="messages-container"></div>
@@ -125,8 +124,14 @@
                     </div>
                     <button id="cancel-reply-btn"><i class="fa-solid fa-times"></i></button>
                 </div>
+
+                <div id="file-attachment-preview" class="file-attachment-preview hidden"></div>
+
                 <form id="message-form">
                     <div class="message-input-wrapper">
+                        <button type="button" id="attach-file-btn" class="attach-file-btn" title="Attach File">
+                            <i class="fa-solid fa-paperclip"></i>
+                        </button>
                         <textarea id="message-input" placeholder="Type a message..." autocomplete="off"
                             rows="1"></textarea>
                         <button type="submit" title="Send Message">
@@ -243,15 +248,6 @@
                 <form id="edit-message-form">
                     <textarea id="edit-message-input" placeholder="Edit your message..." rows="4"></textarea>
                     <button type="submit">Save Changes</button>
-                </form>
-            </div>
-
-            <div id="file-preview-modal" class="hidden">
-                <h2>Send File</h2>
-                <div id="file-preview-content"></div>
-                <form id="file-send-form">
-                    <textarea id="file-caption-input" placeholder="Add a caption (optional)..." rows="2"></textarea>
-                    <button type="submit">Send</button>
                 </form>
             </div>
 
@@ -404,7 +400,8 @@
     </div>
 
     <audio id="incoming-call-audio" src="/audios/calling.mp3" loop preload="auto"></audio>
-    <input type="file" id="file-input" class="hidden" multiple accept="image/*,audio/*,.pdf,.doc,.docx,.txt">
+    <input type="file" id="file-input" class="hidden" multiple
+        accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.txt,.zip,.rar">
 
     <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
     <script src="https://unpkg.com/peerjs@1.5.5/dist/peerjs.min.js"></script>

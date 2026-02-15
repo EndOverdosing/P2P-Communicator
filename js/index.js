@@ -109,10 +109,6 @@ document.addEventListener('DOMContentLoaded', () => {
         editMessageForm: document.getElementById('edit-message-form'),
         editMessageInput: document.getElementById('edit-message-input'),
         fileInput: document.getElementById('file-input'),
-        filePreviewModal: document.getElementById('file-preview-modal'),
-        filePreviewContent: document.getElementById('file-preview-content'),
-        fileSendForm: document.getElementById('file-send-form'),
-        fileCaptionInput: document.getElementById('file-caption-input'),
         friendRequestsModal: document.getElementById('friend-requests-modal'),
         requestsList: document.getElementById('requests-list'),
         closeChatPaneBtn: document.getElementById('close-chat-pane-btn'),
@@ -146,6 +142,8 @@ document.addEventListener('DOMContentLoaded', () => {
     let incomingCallTimeout = null;
     let isInCall = false;
     let typingTimeout = null;
+
+    let userKeys = { publicKey: null, privateKey: null };
 
     let currentTab = 'personal';
     let servers = [];
@@ -181,7 +179,6 @@ document.addEventListener('DOMContentLoaded', () => {
         ui.friendProfileModal?.classList.add('hidden');
         ui.changeUsernameModal?.classList.add('hidden');
         ui.editMessageModal?.classList.add('hidden');
-        ui.filePreviewModal?.classList.add('hidden');
         ui.createServerModal?.classList.add('hidden');
         ui.joinServerModal?.classList.add('hidden');
         ui.serverInfoModal?.classList.add('hidden');
@@ -213,6 +210,28 @@ document.addEventListener('DOMContentLoaded', () => {
     async function switchTab(tab) {
         currentTab = tab;
         updateURLPath(tab);
+
+        const sidebarTitle = document.getElementById('sidebar-title');
+        if (sidebarTitle) {
+            sidebarTitle.textContent = tab === 'personal' ? 'Messages' : 'Servers';
+        }
+
+        const addFriendBtn = document.getElementById('add-friend-btn');
+        if (addFriendBtn) {
+            if (tab === 'global') {
+                addFriendBtn.innerHTML = '<i class="fa-solid fa-plus"></i>';
+                addFriendBtn.onclick = () => {
+                    closeAllModals();
+                    ui.createServerModal.classList.remove('hidden');
+                    ui.modalContainer.classList.remove('hidden');
+                };
+            } else {
+                addFriendBtn.innerHTML = '<i class="fa-solid fa-user-plus"></i>';
+                addFriendBtn.onclick = () => {
+                    showModal(ui.addFriendModal);
+                };
+            }
+        }
 
         document.querySelectorAll('.navbar-btn').forEach(btn => {
             btn.classList.toggle('active', btn.dataset.tab === tab);
@@ -308,7 +327,10 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             const { data, error } = await supabaseClient
                 .from('servers')
-                .select('*, server_members(count)')
+                .select(`
+                *,
+                server_members(count)
+            `)
                 .order('created_at', { ascending: false });
 
             if (error) throw error;
@@ -318,7 +340,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 renderConversationsList();
             }
         } catch (error) {
-            console.error('Error loading servers:', error);
         }
     }
 
@@ -351,7 +372,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             }
         } catch (error) {
-            console.error('Error joining server:', error);
         }
     }
 
@@ -458,7 +478,6 @@ document.addEventListener('DOMContentLoaded', () => {
             })
             .subscribe((status, err) => {
                 if (err) {
-                    console.error('[REALTIME] Subscription error:', err);
                 }
                 if (status === 'SUBSCRIBED') {
                 }
@@ -502,7 +521,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
             renderAllServerMessages(data || [], userMap);
         } catch (error) {
-            console.error('[LOAD] Error loading server messages:', error);
             ui.messagesContainer.innerHTML = '';
         }
     }
@@ -594,7 +612,6 @@ document.addEventListener('DOMContentLoaded', () => {
             ui.serverInfoModal.classList.remove('hidden');
             ui.modalContainer.classList.remove('hidden');
         } catch (error) {
-            console.error('[INFO] Error loading server info:', error);
         }
     });
 
@@ -649,7 +666,6 @@ document.addEventListener('DOMContentLoaded', () => {
     let touchStartX = 0;
     let touchStartY = 0;
     let currentSwipeElement = null;
-    let swipeThreshold = 60;
 
     let activeCallInvite = null;
     let callRetryInterval = null;
@@ -661,9 +677,6 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        if (messagesContainer.dataset.swipeInitialized) return;
-        messagesContainer.dataset.swipeInitialized = 'true';
-
         messagesContainer.addEventListener('touchstart', (e) => {
             const messageElement = e.target.closest('.message');
             if (!messageElement) return;
@@ -671,10 +684,7 @@ document.addEventListener('DOMContentLoaded', () => {
             touchStartX = e.touches[0].clientX;
             touchStartY = e.touches[0].clientY;
             currentSwipeElement = messageElement;
-
-            const timestamp = messageElement.querySelector('.message-timestamp-reveal');
-            if (timestamp) timestamp.style.opacity = '0';
-        }, { passive: true });
+        });
 
         messagesContainer.addEventListener('touchmove', (e) => {
             if (!currentSwipeElement) return;
@@ -684,27 +694,17 @@ document.addEventListener('DOMContentLoaded', () => {
             const deltaX = touchX - touchStartX;
             const deltaY = touchY - touchStartY;
 
-            if (Math.abs(deltaY) > Math.abs(deltaX)) {
-                currentSwipeElement = null;
-                return;
+            if (Math.abs(deltaX) > Math.abs(deltaY)) {
+                e.preventDefault();
             }
 
-            const isSentMessage = currentSwipeElement.classList.contains('sent');
-            const isReceivedMessage = currentSwipeElement.classList.contains('received');
+            const maxSwipe = 100;
+            currentSwipeElement.style.transform = '';
 
-            if ((isSentMessage && deltaX < 0) || (isReceivedMessage && deltaX > 0)) {
-                e.preventDefault();
-                const maxSwipe = 80;
-                const swipeAmount = Math.min(Math.abs(deltaX), maxSwipe);
-                const direction = deltaX < 0 ? -1 : 1;
-
-                currentSwipeElement.style.transform = `translateX(${swipeAmount * direction}px)`;
-
-                const timestamp = currentSwipeElement.querySelector('.message-timestamp-reveal');
-                if (timestamp) {
-                    const opacity = Math.min(swipeAmount / swipeThreshold, 1);
-                    timestamp.style.opacity = opacity;
-                }
+            const timestamp = currentSwipeElement.querySelector('.message-timestamp-reveal');
+            if (timestamp) {
+                const opacity = Math.min(Math.abs(deltaX) / maxSwipe, 1);
+                timestamp.style.opacity = opacity;
             }
         }, { passive: false });
 
@@ -723,6 +723,9 @@ document.addEventListener('DOMContentLoaded', () => {
     document.addEventListener('visibilitychange', () => {
         isTabVisible = !document.hidden;
         if (isTabVisible) {
+            if (currentUser) {
+                updateUserPresence();
+            }
             if (currentUser) {
                 updateUserPresence();
             }
@@ -801,7 +804,6 @@ document.addEventListener('DOMContentLoaded', () => {
             isInCall = true;
 
         } catch (error) {
-            console.error('Media access error:', error);
             const isHTTP = window.location.protocol === 'http:' && window.location.hostname !== 'localhost';
 
             if (error.name === 'NotAllowedError') {
@@ -818,7 +820,90 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
-    ui.chatOptionsBtn.onclick = () => {
+    if (ui.chatOptionsBtn) {
+        ui.chatOptionsBtn.onclick = () => {
+            if (currentChatType === 'friend' && currentChatFriend) {
+                const friendOptionsHTML = `
+            <h2>Chat Options</h2>
+            <div class="friend-options-list">
+                <button class="option-btn" id="view-profile-btn-dynamic">
+                    <i class="fa-solid fa-user"></i>
+                    <span>View Profile</span>
+                </button>
+                <button class="option-btn" id="mute-conversation-btn-dynamic">
+                    <i class="fa-solid fa-bell-slash"></i>
+                    <span>Mute Conversation</span>
+                </button>
+                <button class="option-btn" id="block-user-btn-dynamic">
+                    <i class="fa-solid fa-ban"></i>
+                    <span>Block User</span>
+                </button>
+                <button class="option-btn danger" id="unfriend-btn-dynamic">
+                    <i class="fa-solid fa-user-minus"></i>
+                    <span>Remove Friend</span>
+                </button>
+            </div>
+        `;
+
+                ui.chatOptionsModal.innerHTML = friendOptionsHTML;
+                showModal(ui.chatOptionsModal);
+
+                document.getElementById('view-profile-btn-dynamic').onclick = ui.viewProfileBtn.onclick;
+                document.getElementById('block-user-btn-dynamic').onclick = ui.blockUserBtn.onclick;
+
+            } else if (currentChatType === 'server' && currentServer) {
+                const serverOptionsHTML = `
+            <h2>Server Options</h2>
+            <div class="friend-options-list">
+                <button class="option-btn" id="server-info-btn-dynamic">
+                    <i class="fa-solid fa-info-circle"></i>
+                    <span>Server Info</span>
+                </button>
+                <button class="option-btn" id="mute-server-btn-dynamic">
+                    <i class="fa-solid fa-bell-slash"></i>
+                    <span>Mute Server</span>
+                </button>
+                <button class="option-btn danger" id="leave-server-btn-dynamic">
+                    <i class="fa-solid fa-right-from-bracket"></i>
+                    <span>Leave Server</span>
+                </button>
+            </div>
+        `;
+
+                ui.chatOptionsModal.innerHTML = serverOptionsHTML;
+                showModal(ui.chatOptionsModal);
+
+                document.getElementById('server-info-btn-dynamic').onclick = () => {
+                    hideModal();
+                    ui.serverInfoBtn.click();
+                };
+
+                document.getElementById('leave-server-btn-dynamic').onclick = async () => {
+                    showConfirmation(
+                        'Leave Server',
+                        `Are you sure you want to leave ${currentServer.name}?`,
+                        async () => {
+                            try {
+                                await supabaseClient
+                                    .from('server_members')
+                                    .delete()
+                                    .eq('server_id', currentServer.id)
+                                    .eq('user_id', currentUser.id);
+
+                                hideModal();
+                                switchTab('global');
+                                showInfo('Success', 'Left server successfully');
+                            } catch (error) {
+                                showInfo('Error', error.message);
+                            }
+                        }
+                    );
+                };
+            }
+        };
+    }
+
+    function showChatOptions() {
         if (currentChatType === 'friend' && currentChatFriend) {
             const friendOptionsHTML = `
             <h2>Chat Options</h2>
@@ -849,55 +934,9 @@ document.addEventListener('DOMContentLoaded', () => {
             document.getElementById('block-user-btn-dynamic').onclick = ui.blockUserBtn.onclick;
 
         } else if (currentChatType === 'server' && currentServer) {
-            const serverOptionsHTML = `
-            <h2>Server Options</h2>
-            <div class="friend-options-list">
-                <button class="option-btn" id="server-info-btn-dynamic">
-                    <i class="fa-solid fa-info-circle"></i>
-                    <span>Server Info</span>
-                </button>
-                <button class="option-btn" id="mute-server-btn-dynamic">
-                    <i class="fa-solid fa-bell-slash"></i>
-                    <span>Mute Server</span>
-                </button>
-                <button class="option-btn danger" id="leave-server-btn-dynamic">
-                    <i class="fa-solid fa-right-from-bracket"></i>
-                    <span>Leave Server</span>
-                </button>
-            </div>
-        `;
-
-            ui.chatOptionsModal.innerHTML = serverOptionsHTML;
-            showModal(ui.chatOptionsModal);
-
-            document.getElementById('server-info-btn-dynamic').onclick = () => {
-                hideModal();
-                ui.serverInfoBtn.click();
-            };
-
-            document.getElementById('leave-server-btn-dynamic').onclick = async () => {
-                showConfirmation(
-                    'Leave Server',
-                    `Are you sure you want to leave ${currentServer.name}?`,
-                    async () => {
-                        try {
-                            await supabaseClient
-                                .from('server_members')
-                                .delete()
-                                .eq('server_id', currentServer.id)
-                                .eq('user_id', currentUser.id);
-
-                            hideModal();
-                            switchTab('global');
-                            showInfo('Success', 'Left server successfully');
-                        } catch (error) {
-                            showInfo('Error', error.message);
-                        }
-                    }
-                );
-            };
+            ui.serverInfoBtn.click();
         }
-    };
+    }
 
     const showAuth = (show) => ui.authContainer.classList.toggle('hidden', !show);
     const showApp = (show) => ui.mainApp.classList.toggle('hidden', !show);
@@ -985,8 +1024,6 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
         peer.on('error', (error) => {
-            console.error('Peer error:', error);
-
             if (error.type === 'peer-unavailable') {
                 return;
             }
@@ -1025,6 +1062,137 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
+    const CryptoHelper = {
+        async generateKeyPair() {
+            return await crypto.subtle.generateKey(
+                {
+                    name: "RSA-OAEP",
+                    modulusLength: 2048,
+                    publicExponent: new Uint8Array([1, 0, 1]),
+                    hash: "SHA-256"
+                },
+                true,
+                ["encrypt", "decrypt"]
+            );
+        },
+
+        async exportPublicKey(key) {
+            const exported = await crypto.subtle.exportKey("spki", key);
+            return btoa(String.fromCharCode(...new Uint8Array(exported)));
+        },
+
+        async importPublicKey(keyData) {
+            const binaryKey = Uint8Array.from(atob(keyData), c => c.charCodeAt(0));
+            return await crypto.subtle.importKey(
+                "spki",
+                binaryKey,
+                { name: "RSA-OAEP", hash: "SHA-256" },
+                true,
+                ["encrypt"]
+            );
+        },
+
+        async exportPrivateKey(key) {
+            const exported = await crypto.subtle.exportKey("pkcs8", key);
+            return btoa(String.fromCharCode(...new Uint8Array(exported)));
+        },
+
+        async importPrivateKey(keyData) {
+            const binaryKey = Uint8Array.from(atob(keyData), c => c.charCodeAt(0));
+            return await crypto.subtle.importKey(
+                "pkcs8",
+                binaryKey,
+                { name: "RSA-OAEP", hash: "SHA-256" },
+                true,
+                ["decrypt"]
+            );
+        },
+
+        async generateAESKey() {
+            return await crypto.subtle.generateKey(
+                { name: "AES-GCM", length: 256 },
+                true,
+                ["encrypt", "decrypt"]
+            );
+        },
+
+        async exportAESKey(key) {
+            const exported = await crypto.subtle.exportKey("raw", key);
+            return btoa(String.fromCharCode(...new Uint8Array(exported)));
+        },
+
+        async importAESKey(keyData) {
+            const binaryKey = Uint8Array.from(atob(keyData), c => c.charCodeAt(0));
+            return await crypto.subtle.importKey(
+                "raw",
+                binaryKey,
+                { name: "AES-GCM" },
+                true,
+                ["encrypt", "decrypt"]
+            );
+        },
+
+        async encryptMessage(message, recipientPublicKey) {
+            const aesKey = await this.generateAESKey();
+            const iv = crypto.getRandomValues(new Uint8Array(12));
+
+            const encoder = new TextEncoder();
+            const encodedMessage = encoder.encode(message);
+
+            const encryptedMessage = await crypto.subtle.encrypt(
+                { name: "AES-GCM", iv: iv },
+                aesKey,
+                encodedMessage
+            );
+
+            const exportedAESKey = await crypto.subtle.exportKey("raw", aesKey);
+            const encryptedAESKey = await crypto.subtle.encrypt(
+                { name: "RSA-OAEP" },
+                recipientPublicKey,
+                exportedAESKey
+            );
+
+            return {
+                encryptedMessage: btoa(String.fromCharCode(...new Uint8Array(encryptedMessage))),
+                encryptedKey: btoa(String.fromCharCode(...new Uint8Array(encryptedAESKey))),
+                iv: btoa(String.fromCharCode(...new Uint8Array(iv)))
+            };
+        },
+
+        async decryptMessage(encryptedData, privateKey) {
+            try {
+                const encryptedAESKey = Uint8Array.from(atob(encryptedData.encryptedKey), c => c.charCodeAt(0));
+                const encryptedMessage = Uint8Array.from(atob(encryptedData.encryptedMessage), c => c.charCodeAt(0));
+                const iv = Uint8Array.from(atob(encryptedData.iv), c => c.charCodeAt(0));
+
+                const aesKeyData = await crypto.subtle.decrypt(
+                    { name: "RSA-OAEP" },
+                    privateKey,
+                    encryptedAESKey
+                );
+
+                const aesKey = await crypto.subtle.importKey(
+                    "raw",
+                    aesKeyData,
+                    { name: "AES-GCM" },
+                    false,
+                    ["decrypt"]
+                );
+
+                const decryptedMessage = await crypto.subtle.decrypt(
+                    { name: "AES-GCM", iv: iv },
+                    aesKey,
+                    encryptedMessage
+                );
+
+                const decoder = new TextDecoder();
+                return decoder.decode(decryptedMessage);
+            } catch (error) {
+                return '[Encrypted message - unable to decrypt]';
+            }
+        }
+    };
+
     const loadUserData = async (userId) => {
         try {
             const { data: profile, error } = await supabase
@@ -1034,7 +1202,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 .single();
 
             if (error || !profile) {
-                console.error('Profile load error:', error);
                 return false;
             }
 
@@ -1054,6 +1221,54 @@ document.addEventListener('DOMContentLoaded', () => {
                 last_seen: new Date().toISOString()
             }).eq('id', userId);
 
+            const initializeEncryption = async () => {
+                const storedPrivateKey = localStorage.getItem(`privateKey_${currentUser.id}`);
+
+                if (storedPrivateKey) {
+                    try {
+                        userKeys.privateKey = await CryptoHelper.importPrivateKey(storedPrivateKey);
+
+                        const { data: profile } = await supabase
+                            .from('profiles')
+                            .select('public_key')
+                            .eq('id', currentUser.id)
+                            .single();
+
+                        if (profile?.public_key) {
+                            userKeys.publicKey = await CryptoHelper.importPublicKey(profile.public_key);
+                        } else {
+                            await generateNewKeys();
+                        }
+                    } catch (error) {
+                        await generateNewKeys();
+                    }
+                } else {
+                    await generateNewKeys();
+                }
+            };
+
+            const generateNewKeys = async () => {
+                const keyPair = await CryptoHelper.generateKeyPair();
+                userKeys.publicKey = keyPair.publicKey;
+                userKeys.privateKey = keyPair.privateKey;
+
+                const exportedPublicKey = await CryptoHelper.exportPublicKey(keyPair.publicKey);
+                const exportedPrivateKey = await CryptoHelper.exportPrivateKey(keyPair.privateKey);
+
+                localStorage.setItem(`privateKey_${currentUser.id}`, exportedPrivateKey);
+
+                const { error } = await supabase
+                    .from('profiles')
+                    .update({ public_key: exportedPublicKey })
+                    .eq('id', currentUser.id);
+
+                if (error) {
+                } else {
+                }
+            };
+
+            await initializeEncryption();
+
             await loadFriends();
             await loadFriendRequests();
             await loadBlockedUsers();
@@ -1067,7 +1282,6 @@ document.addEventListener('DOMContentLoaded', () => {
             subscribeToCallInvites();
             subscribeToFriendRequests();
             subscribeToFriendships();
-            subscribeToCallInvites();
 
             initializePeer(userId);
             startKeepAlive();
@@ -1080,7 +1294,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
             return true;
         } catch (error) {
-            console.error('Failed to load user data:', error);
             return false;
         }
     };
@@ -1137,13 +1350,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const { data: friendships } = await supabase
             .from('friendships')
-            .select('*, friend:profiles!friendships_friend_id_fkey(*)')
+            .select('*, friend:profiles!friendships_friend_id_fkey(*, public_key)')
             .eq('user_id', currentUser.id)
             .eq('status', 'accepted');
 
         const { data: reverseFriendships } = await supabase
             .from('friendships')
-            .select('*, friend:profiles!friendships_user_id_fkey(*)')
+            .select('*, friend:profiles!friendships_user_id_fkey(*, public_key)')
             .eq('friend_id', currentUser.id)
             .eq('status', 'accepted');
 
@@ -1173,25 +1386,113 @@ document.addEventListener('DOMContentLoaded', () => {
         }, 500);
     };
 
-    const addFileButton = () => {
-        const fileBtn = document.createElement('button');
-        fileBtn.type = 'button';
-        fileBtn.className = 'attach-file-btn';
-        fileBtn.innerHTML = '<i class="fa-solid fa-paperclip"></i>';
-        fileBtn.title = 'Attach File';
-        fileBtn.style.cssText = `
-        background: var(--tertiary-bg);
-        color: var(--secondary-text);
-        font-size: 1.2rem;
-        padding: 0;
-        margin-right: 0.5rem;
-    `;
-        fileBtn.onclick = () => ui.fileInput.click();
-
-        const messageWrapper = document.querySelector('.message-input-wrapper');
-        if (messageWrapper && !messageWrapper.querySelector('.attach-file-btn')) {
-            messageWrapper.insertBefore(fileBtn, messageWrapper.firstChild);
+    const initializeFileAttachment = () => {
+        const attachBtn = document.getElementById('attach-file-btn');
+        const fileInput = ui.fileInput;
+        if (!attachBtn || !fileInput) {
+            return;
         }
+
+        attachBtn.onclick = () => {
+            fileInput.click();
+        };
+
+        fileInput.onchange = (e) => {
+            const files = Array.from(e.target.files);
+            if (files.length === 0) return;
+
+            files.forEach(file => {
+                if (!pendingFiles.find(f => f.name === file.name && f.size === file.size)) {
+                    pendingFiles.push(file);
+                } else {
+                }
+            });
+            renderFilePreview();
+            e.target.value = '';
+        };
+
+    };
+
+    const renderFilePreview = () => {
+
+        const filePreview = document.getElementById('file-attachment-preview');
+
+        if (!filePreview) {
+            return;
+        }
+
+        if (pendingFiles.length === 0) {
+            filePreview.classList.add('hidden');
+            return;
+        }
+
+        filePreview.classList.remove('hidden');
+        filePreview.innerHTML = '';
+
+        pendingFiles.forEach((file, index) => {
+            const fileItem = document.createElement('div');
+            fileItem.className = 'file-attachment-item';
+
+            const removeBtn = document.createElement('button');
+            removeBtn.className = 'file-attachment-remove';
+            removeBtn.innerHTML = '<i class="fa-solid fa-times"></i>';
+            removeBtn.onclick = (e) => {
+                e.preventDefault();
+                pendingFiles.splice(index, 1);
+                renderFilePreview();
+            };
+
+            if (file.type.startsWith('image/')) {
+                const img = document.createElement('img');
+                img.src = URL.createObjectURL(file);
+                img.alt = file.name;
+                fileItem.appendChild(img);
+            } else if (file.type.startsWith('video/')) {
+                const video = document.createElement('video');
+                video.src = URL.createObjectURL(file);
+                video.muted = true;
+                fileItem.appendChild(video);
+            } else if (file.type.startsWith('audio/')) {
+                fileItem.classList.add('file-type');
+                fileItem.innerHTML = `
+                <i class="fa-solid fa-music"></i>
+                <span class="file-name">${file.name}</span>
+            `;
+            } else {
+                fileItem.classList.add('file-type');
+                const icon = getFileIcon(file.type, file.name);
+                fileItem.innerHTML = `
+                <i class="fa-solid ${icon}"></i>
+                <span class="file-name">${file.name}</span>
+            `;
+            }
+
+            fileItem.appendChild(removeBtn);
+            filePreview.appendChild(fileItem);
+        });
+
+    };
+
+    const getFileIcon = (mimeType, fileName) => {
+        const ext = fileName.split('.').pop().toLowerCase();
+
+        if (mimeType.includes('pdf') || ext === 'pdf') return 'fa-file-pdf';
+        if (mimeType.includes('word') || ['doc', 'docx'].includes(ext)) return 'fa-file-word';
+        if (mimeType.includes('excel') || ['xls', 'xlsx'].includes(ext)) return 'fa-file-excel';
+        if (mimeType.includes('powerpoint') || ['ppt', 'pptx'].includes(ext)) return 'fa-file-powerpoint';
+        if (mimeType.includes('zip') || mimeType.includes('rar') || ['zip', 'rar', '7z'].includes(ext)) return 'fa-file-zipper';
+        if (['txt', 'md'].includes(ext)) return 'fa-file-lines';
+        if (['json', 'xml', 'html', 'css', 'js'].includes(ext)) return 'fa-file-code';
+
+        return 'fa-file';
+    };
+
+    const formatFileSize = (bytes) => {
+        if (bytes === 0) return '0 Bytes';
+        const k = 1024;
+        const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
     };
 
     const loadFriendRequests = async () => {
@@ -1302,7 +1603,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
 
                 showModal(ui.incomingCallModal);
-                ui.incomingCallAudio.play().catch(err => console.error('Error playing call sound:', err));
 
                 incomingCallTimeout = setTimeout(() => {
                     if (!isInCall && incomingCallData) {
@@ -1398,34 +1698,29 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const subscribeToMessages = () => {
         if (!currentUser || !currentUser.id) {
-            console.error('Cannot subscribe to messages: currentUser not loaded');
             return;
         }
 
         const channel = supabase
-            .channel('messages-changes')
-            .on('postgres_changes', {
-                event: 'INSERT',
-                schema: 'public',
-                table: 'messages',
-                filter: `or(receiver_id.eq.${currentUser.id},sender_id.eq.${currentUser.id})`
-            }, async (payload) => {
-                await handleNewMessage(payload.new);
+            .channel(`realtime-messages-${currentUser.id}`)
+            .on('broadcast', { event: 'new_message' }, async (payload) => {
+                const message = payload.payload;
+
+                if (message.receiver_id === currentUser.id || message.sender_id === currentUser.id) {
+                    await handleNewMessage(message);
+                }
             })
-            .on('postgres_changes', {
-                event: 'UPDATE',
-                schema: 'public',
-                table: 'messages',
-                filter: `or(receiver_id.eq.${currentUser.id},sender_id.eq.${currentUser.id})`
-            }, (payload) => {
-                updateMessageInUI(payload.new);
+            .on('broadcast', { event: 'message_updated' }, (payload) => {
+                const { messageId, content } = payload.payload;
+                updateMessageInUI({ id: messageId, content, edited: true });
             })
-            .on('postgres_changes', {
-                event: 'DELETE',
-                schema: 'public',
-                table: 'messages'
-            }, (payload) => {
-                removeMessageFromUI(payload.old.id);
+            .on('broadcast', { event: 'message_deleted' }, (payload) => {
+                const messageId = payload.payload.messageId;
+                removeMessageFromUI(messageId);
+            })
+            .on('broadcast', { event: 'reaction_updated' }, async (payload) => {
+                const { messageId, reactions } = payload.payload;
+                renderReactions(messageId, reactions || {});
             })
             .subscribe();
 
@@ -1581,8 +1876,28 @@ document.addEventListener('DOMContentLoaded', () => {
         const existingElement = document.querySelector(`[data-message-id="${message.id}"]`);
         if (existingElement) return;
 
-        const { data: sender, error: senderError } = await supabase.from('profiles').select('*').eq('id', message.sender_id).single();
+        const { data: sender } = await supabase.from('profiles').select('*').eq('id', message.sender_id).single();
         if (!sender) return;
+
+        if (message.is_encrypted) {
+            try {
+                if (message.receiver_id === currentUser.id && message.encrypted_content) {
+                    message.content = await CryptoHelper.decryptMessage({
+                        encryptedMessage: message.encrypted_content,
+                        encryptedKey: message.encrypted_key,
+                        iv: message.iv
+                    }, userKeys.privateKey);
+                } else if (message.sender_id === currentUser.id && message.sender_encrypted_content) {
+                    message.content = await CryptoHelper.decryptMessage({
+                        encryptedMessage: message.sender_encrypted_content,
+                        encryptedKey: message.sender_encrypted_key,
+                        iv: message.sender_iv
+                    }, userKeys.privateKey);
+                }
+            } catch (error) {
+                message.content = '[Unable to decrypt]';
+            }
+        }
 
         await updateConversationsList();
 
@@ -1853,7 +2168,6 @@ document.addEventListener('DOMContentLoaded', () => {
             .single();
 
         if (!request) {
-            console.error('Friend request not found');
             return;
         }
 
@@ -1863,7 +2177,6 @@ document.addEventListener('DOMContentLoaded', () => {
             .eq('id', requestId);
 
         if (error) {
-            console.error('Error accepting friend request:', error);
             showInfoModal('Error', 'Failed to accept friend request.');
             return;
         }
@@ -1888,6 +2201,8 @@ document.addEventListener('DOMContentLoaded', () => {
             event: 'friend_accepted',
             payload: { friendId: currentUser.id }
         });
+
+        supabase.removeChannel(notifyChannel);
     };
 
     window.declineFriendRequest = async (requestId) => {
@@ -1898,7 +2213,6 @@ document.addEventListener('DOMContentLoaded', () => {
             .single();
 
         if (!request) {
-            console.error('Friend request not found');
             return;
         }
 
@@ -1908,7 +2222,6 @@ document.addEventListener('DOMContentLoaded', () => {
             .eq('id', requestId);
 
         if (error) {
-            console.error('Error declining friend request:', error);
             return;
         }
 
@@ -1930,6 +2243,8 @@ document.addEventListener('DOMContentLoaded', () => {
             event: 'request_declined',
             payload: { declinedBy: currentUser.id }
         });
+
+        supabase.removeChannel(notifyChannel);
     };
 
     window.openChat = async (id, type) => {
@@ -1940,7 +2255,6 @@ document.addEventListener('DOMContentLoaded', () => {
             currentChatFriend = friends[id];
             if (!currentChatFriend) return;
 
-            ui.chatFriendName.textContent = currentChatFriend.username;
             ui.chatAvatar.textContent = currentChatFriend.username[0].toUpperCase();
 
             const isOnline = onlineUsers.has(currentChatFriend.id);
@@ -1962,21 +2276,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const friendInfo = document.querySelector('#chat-header .friend-info');
         if (friendInfo) {
-            friendInfo.onclick = () => {
-                if (currentChatType === 'friend' && currentChatFriend) {
-                    ui.profileUsername.textContent = currentChatFriend.username;
-                    ui.profileUsernameValue.textContent = currentChatFriend.username;
-                    ui.profileAvatar.textContent = currentChatFriend.username[0].toUpperCase();
-
-                    if (currentChatFriend.avatar_url) {
-                        ui.profileAvatar.innerHTML = `<img src="${currentChatFriend.avatar_url}" alt="${currentChatFriend.username}">`;
-                    }
-
-                    const isOnline = onlineUsers.has(currentChatFriend.id);
-                    ui.profileStatusDot.classList.toggle('online', isOnline);
-                    ui.profileStatusText.textContent = isOnline ? 'Online' : 'Offline';
-                }
-            };
+            friendInfo.onclick = showChatOptions;
         }
 
         initializeMessageSwipe();
@@ -2083,7 +2383,8 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    function createMessageElement(message, sender) {
+    const createMessageElement = (message, sender) => {
+
         const messageDiv = document.createElement('div');
         messageDiv.className = `message ${message.sender_id === currentUser.id ? 'sent' : 'received'}`;
         messageDiv.dataset.messageId = message.id;
@@ -2093,9 +2394,28 @@ document.addEventListener('DOMContentLoaded', () => {
 
         let content = '';
 
+        if (message.is_encrypted) {
+            content += '<span style="font-size: 0.7rem; color: var(--secondary-text); display: flex; align-items: center; gap: 0.25rem; margin-bottom: 0.25rem;"><i class="fa-solid fa-lock"></i> Encrypted</span>';
+        }
+
         if (message.reply_to_id) {
             const replyText = message.reply_to_content || 'Original message';
             content += `<div class="message-reply-context" style="background: rgba(88, 101, 242, 0.1); padding: 0.5rem; border-left: 3px solid var(--primary-accent); margin-bottom: 0.5rem; border-radius: 4px; font-size: 0.85rem;"><i class="fa-solid fa-reply"></i> ${escapeHtml(replyText.substring(0, 50))}${replyText.length > 50 ? '...' : ''}</div>`;
+        }
+
+        if (message.files && Array.isArray(message.files) && message.files.length > 0) {
+            message.files.forEach(file => {
+                if (file.type.startsWith('image/')) {
+                    content += `<img src="${file.url}" alt="${file.name}" class="message-image" onclick="window.open('${file.url}', '_blank')" style="max-width: 150px; max-height: 150px; border-radius: var(--button-border-radius); cursor: pointer; display: block; margin: 0.5rem 0;">`;
+                } else if (file.type.startsWith('video/')) {
+                    content += `<video controls src="${file.url}" style="max-width: 300px; border-radius: var(--button-border-radius); margin: 0.5rem 0;"></video>`;
+                } else if (file.type.startsWith('audio/')) {
+                    content += `<audio controls src="${file.url}" class="message-audio" style="max-width: 100%; margin: 0.5rem 0;"></audio>`;
+                } else {
+                    const icon = getFileIcon(file.type, file.name);
+                    content += `<a href="${file.url}" target="_blank" class="message-file" style="display: inline-flex; align-items: center; gap: 0.5rem; padding: 0.5rem; background: var(--tertiary-bg); border-radius: var(--button-border-radius); text-decoration: none; color: var(--primary-text); margin: 0.5rem 0;"><i class="fa-solid ${icon}"></i> <div><div>${file.name}</div><div style="font-size: 0.85rem; color: var(--secondary-text);">${formatFileSize(file.size)}</div></div></a>`;
+                }
+            });
         }
 
         if (message.file_url) {
@@ -2114,9 +2434,10 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         if (message.call_duration !== null && message.call_duration !== undefined) {
-            const caller = message.sender_id === currentUser.id ? 'You' : sender.username;
             const duration = formatCallDuration(message.call_duration);
-            content = `<div class="message-call-info" style="display: flex; align-items: center; gap: 0.5rem;"><i class="fa-solid fa-phone"></i> ${caller} called at ${duration}</div>`;
+            const callType = message.call_duration === 0 ? 'Missed call' : 'Call';
+            const durationText = message.call_duration === 0 ? '' : ` • ${duration}`;
+            content = `<div class="message-call-info" style="display: flex; align-items: center; gap: 0.5rem; color: var(--secondary-text); font-size: 0.9rem;"><i class="fa-solid fa-phone"></i> ${callType}${durationText}</div>`;
         }
 
         content += `<div class="message-reactions" data-message-id="${message.id}" style="display: flex; flex-wrap: wrap; gap: 0.25rem; margin-top: 0.25rem;"></div>`;
@@ -2198,9 +2519,8 @@ document.addEventListener('DOMContentLoaded', () => {
         if (message.reactions) {
             renderReactions(message.id, message.reactions);
         }
-
         return messageDiv;
-    }
+    };
 
     function createServerMessageElement(msg, username) {
         const messageDiv = document.createElement('div');
@@ -2229,8 +2549,33 @@ document.addEventListener('DOMContentLoaded', () => {
                 .select('*')
                 .or(`and(sender_id.eq.${currentUser.id},receiver_id.eq.${friendId}),and(sender_id.eq.${friendId},receiver_id.eq.${currentUser.id})`)
                 .order('created_at', { ascending: true });
+            messages?.forEach(msg => {
+            });
 
-            renderAllMessages(messages || []);
+            const decryptedMessages = await Promise.all(messages.map(async (msg) => {
+                if (msg.is_encrypted) {
+                    try {
+                        if (msg.sender_id === currentUser.id && msg.sender_encrypted_content) {
+                            msg.content = await CryptoHelper.decryptMessage({
+                                encryptedMessage: msg.sender_encrypted_content,
+                                encryptedKey: msg.sender_encrypted_key,
+                                iv: msg.sender_iv
+                            }, userKeys.privateKey);
+                        }
+                        else if (msg.receiver_id === currentUser.id && msg.encrypted_content) {
+                            msg.content = await CryptoHelper.decryptMessage({
+                                encryptedMessage: msg.encrypted_content,
+                                encryptedKey: msg.encrypted_key,
+                                iv: msg.iv
+                            }, userKeys.privateKey);
+                        }
+                    } catch (error) {
+                        msg.content = '[Unable to decrypt]';
+                    }
+                }
+                return msg;
+            }));
+            renderAllMessages(decryptedMessages || []);
 
             if (userSettings.readReceipts) {
                 await supabase.from('messages')
@@ -2241,14 +2586,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
             scrollToBottom();
         } catch (error) {
-            console.error('Error loading messages:', error);
             ui.messagesContainer.innerHTML = '';
         }
     };
 
     const displayMessage = (message, sender) => {
         if (document.querySelector(`[data-message-id="${message.id}"]`)) return;
-
         const messageDiv = document.createElement('div');
         messageDiv.className = `message ${message.sender_id === currentUser.id ? 'sent' : 'received'}`;
         messageDiv.dataset.messageId = message.id;
@@ -2258,19 +2601,52 @@ document.addEventListener('DOMContentLoaded', () => {
 
         let content = '';
 
+        if (message.is_encrypted) {
+            content += '<span style="font-size: 0.7rem; color: var(--secondary-text); display: flex; align-items: center; gap: 0.25rem; margin-bottom: 0.25rem;"><i class="fa-solid fa-lock"></i> Encrypted</span>';
+        }
+
         if (message.reply_to_id) {
             const replyText = message.reply_to_content || 'Original message';
             content += `<div class="message-reply-context" style="background: rgba(88, 101, 242, 0.1); padding: 0.5rem; border-left: 3px solid var(--primary-accent); margin-bottom: 0.5rem; border-radius: 4px; font-size: 0.85rem;"><i class="fa-solid fa-reply"></i> ${escapeHtml(replyText.substring(0, 50))}${replyText.length > 50 ? '...' : ''}</div>`;
         }
 
+        if (message.files && Array.isArray(message.files) && message.files.length > 0) {
+            message.files.forEach(file => {
+                if (file.type.startsWith('image/')) {
+                    content += `<div class="message-file-attachment"><img src="${file.url}" alt="${file.name}" onclick="window.open('${file.url}', '_blank')" style="max-width: 300px; max-height: 300px; border-radius: 8px; cursor: pointer; display: block; margin: 0.5rem 0;"></div>`;
+                } else if (file.type.startsWith('video/')) {
+                    content += `<div class="message-file-attachment"><video controls src="${file.url}" style="max-width: 300px; border-radius: 8px; margin: 0.5rem 0;"></video></div>`;
+                } else if (file.type.startsWith('audio/')) {
+                    content += `<div class="message-file-attachment"><audio controls src="${file.url}" style="max-width: 100%; margin: 0.5rem 0;"></audio></div>`;
+                } else {
+                    const icon = getFileIcon(file.type, file.name);
+                    content += `<div class="message-file-attachment document" onclick="window.open('${file.url}', '_blank')" style="display: flex; align-items: center; gap: 0.5rem; padding: 0.75rem; background: var(--tertiary-bg); border-radius: 8px; cursor: pointer; margin: 0.5rem 0;">
+                    <i class="file-icon fa-solid ${icon}" style="font-size: 1.5rem; color: var(--primary-accent);"></i>
+                    <div class="file-info">
+                        <div class="file-name" style="font-weight: 500;">${file.name}</div>
+                        <div class="file-size" style="font-size: 0.85rem; color: var(--secondary-text);">${formatFileSize(file.size)}</div>
+                    </div>
+                </div>`;
+                }
+            });
+        }
+
         if (message.file_url) {
             const fileType = message.file_type || 'file';
             if (fileType.startsWith('image/')) {
-                content += `<img src="${message.file_url}" alt="Image" class="message-image" onclick="window.open('${message.file_url}', '_blank')" style="max-width: 300px; border-radius: var(--button-border-radius); cursor: pointer; display: block;">`;
+                content += `<div class="message-file-attachment"><img src="${message.file_url}" alt="Image" onclick="window.open('${message.file_url}', '_blank')" style="max-width: 300px; max-height: 300px; border-radius: 8px; cursor: pointer; display: block; margin: 0.5rem 0;"></div>`;
             } else if (fileType.startsWith('audio/')) {
-                content += `<audio controls src="${message.file_url}" class="message-audio" style="max-width: 100%;"></audio>`;
+                content += `<div class="message-file-attachment"><audio controls src="${message.file_url}" style="max-width: 100%; margin: 0.5rem 0;"></audio></div>`;
+            } else if (fileType.startsWith('video/')) {
+                content += `<div class="message-file-attachment"><video controls src="${message.file_url}" style="max-width: 300px; border-radius: 8px; margin: 0.5rem 0;"></video></div>`;
             } else {
-                content += `<a href="${message.file_url}" target="_blank" class="message-file" style="display: inline-flex; align-items: center; gap: 0.5rem; padding: 0.5rem; background: var(--tertiary-bg); border-radius: var(--button-border-radius); text-decoration: none; color: var(--primary-text);"><i class="fa-solid fa-file"></i> ${message.file_name || 'File'}</a>`;
+                const icon = getFileIcon(fileType, message.file_name || '');
+                content += `<div class="message-file-attachment document" onclick="window.open('${message.file_url}', '_blank')" style="display: flex; align-items: center; gap: 0.5rem; padding: 0.75rem; background: var(--tertiary-bg); border-radius: 8px; cursor: pointer; margin: 0.5rem 0;">
+                <i class="file-icon fa-solid ${icon}" style="font-size: 1.5rem;"></i>
+                <div class="file-info">
+                    <div class="file-name" style="font-weight: 500;">${message.file_name || 'File'}</div>
+                </div>
+            </div>`;
             }
         }
 
@@ -2279,9 +2655,10 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         if (message.call_duration !== null && message.call_duration !== undefined) {
-            const caller = message.sender_id === currentUser.id ? 'You' : sender.username;
             const duration = formatCallDuration(message.call_duration);
-            content = `<div class="message-call-info" style="display: flex; align-items: center; gap: 0.5rem;"><i class="fa-solid fa-phone"></i> ${caller} called at ${duration}</div>`;
+            const callType = message.call_duration === 0 ? 'Missed call' : 'Call';
+            const durationText = message.call_duration === 0 ? '' : ` • ${duration}`;
+            content = `<div class="message-call-info" style="display: flex; align-items: center; gap: 0.5rem; color: var(--secondary-text); font-size: 0.9rem;"><i class="fa-solid fa-phone"></i> ${callType}${durationText}</div>`;
         }
 
         content += `<div class="message-reactions" data-message-id="${message.id}" style="display: flex; flex-wrap: wrap; gap: 0.25rem; margin-top: 0.25rem;"></div>`;
@@ -2328,7 +2705,31 @@ document.addEventListener('DOMContentLoaded', () => {
             messageDiv.appendChild(timestampDiv);
         }
 
-        messageDiv.addEventListener('contextmenu', (e) => showMessageContextMenu(e, message));
+        messageDiv.addEventListener('contextmenu', (e) => {
+            e.preventDefault();
+            showMessageContextMenu(e, message);
+        });
+
+        let lastTap = 0;
+        const DOUBLE_TAP_DELAY = 300;
+
+        messageDiv.addEventListener('touchend', (e) => {
+            const currentTime = new Date().getTime();
+            const tapLength = currentTime - lastTap;
+
+            if (tapLength < DOUBLE_TAP_DELAY && tapLength > 0) {
+                e.preventDefault();
+                const touch = e.changedTouches[0];
+                const event = new MouseEvent('contextmenu', {
+                    clientX: touch.clientX,
+                    clientY: touch.clientY,
+                    bubbles: true,
+                    cancelable: true
+                });
+                messageDiv.dispatchEvent(event);
+            }
+            lastTap = currentTime;
+        }, { passive: false });
 
         messageDiv.addEventListener('click', (e) => {
             if (e.target.classList.contains('message-reaction')) {
@@ -2337,7 +2738,6 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
         ui.messagesContainer.appendChild(messageDiv);
-
         if (message.reactions) {
             renderReactions(message.id, message.reactions);
         }
@@ -2354,7 +2754,11 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
         element.addEventListener('touchmove', (e) => {
-            if (!isDragging) return;
+            if (!isDragging) {
+                e.preventDefault();
+                return;
+            }
+            e.preventDefault();
             currentX = e.touches[0].clientX;
             const diff = currentX - startX;
 
@@ -2532,25 +2936,25 @@ document.addEventListener('DOMContentLoaded', () => {
 
             pendingFiles = files;
 
-            ui.filePreviewContent.innerHTML = '';
-            files.forEach(file => {
-                const filePreview = document.createElement('div');
-                filePreview.style.cssText = 'margin-bottom: 1rem;';
+            if (ui.filePreviewContent) {
+                ui.filePreviewContent.innerHTML = '';
+                files.forEach(file => {
+                    const filePreview = document.createElement('div');
+                    filePreview.className = 'file-preview-item';
 
-                if (file.type.startsWith('image/')) {
-                    const img = document.createElement('img');
-                    img.src = URL.createObjectURL(file);
-                    img.style.cssText = 'max-width: 100%; max-height: 300px; border-radius: var(--button-border-radius);';
-                    filePreview.appendChild(img);
-                } else {
-                    filePreview.innerHTML = `<div style="padding: 1rem; background: var(--tertiary-bg); border-radius: var(--button-border-radius); display: flex; align-items: center; gap: 0.5rem;"><i class="fa-solid fa-file"></i> ${file.name}</div>`;
-                }
+                    if (file.type.startsWith('image/')) {
+                        const img = document.createElement('img');
+                        img.src = URL.createObjectURL(file);
+                        img.style.maxWidth = '100%';
+                        img.style.maxHeight = '300px';
+                        filePreview.appendChild(img);
+                    } else {
+                        filePreview.innerHTML = `<i class="fa-solid fa-file"></i> ${file.name}`;
+                    }
 
-                ui.filePreviewContent.appendChild(filePreview);
-            });
-
-            showModal(ui.filePreviewModal);
-            e.target.value = '';
+                    ui.filePreviewContent.appendChild(filePreview);
+                });
+            }
         });
     }
 
@@ -2615,10 +3019,12 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
+        updateMessageInUI({ id: editingMessage.id, content: newContent, edited: true });
+
         if (message) {
             const otherUserId = message.sender_id === currentUser.id ? message.receiver_id : message.sender_id;
 
-            const channel = supabase.channel(`messages-${otherUserId}`, {
+            const channel = supabase.channel(`realtime-messages-${otherUserId}`, {
                 config: { broadcast: { self: false } }
             });
 
@@ -2636,6 +3042,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     content: newContent
                 }
             });
+
+            supabase.removeChannel(channel);
         }
 
         editingMessage = null;
@@ -2644,7 +3052,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     window.deleteMessage = async (messageId) => {
         showConfirmationModal('Delete this message?', 'This action cannot be undone.', async () => {
-
             const { data: message } = await supabase
                 .from('messages')
                 .select('sender_id, receiver_id')
@@ -2653,10 +3060,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
             if (!message) return;
 
-            const { data, error } = await supabase.from('messages').delete().eq('id', messageId).select();
+            const { error } = await supabase.from('messages').delete().eq('id', messageId);
 
             if (error) {
-                console.error('[DELETE DEBUG] Delete failed:', error);
                 showInfoModal('Error', 'Failed to delete message.');
                 return;
             }
@@ -2665,17 +3071,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
             const otherUserId = message.sender_id === currentUser.id ? message.receiver_id : message.sender_id;
 
-            const channel = supabase.channel(`messages-${otherUserId}`, {
-                config: {
-                    broadcast: { self: false }
-                }
+            const channel = supabase.channel(`realtime-messages-${otherUserId}`, {
+                config: { broadcast: { self: false } }
             });
 
             await new Promise((resolve) => {
                 channel.subscribe((status) => {
-                    if (status === 'SUBSCRIBED') {
-                        resolve();
-                    }
+                    if (status === 'SUBSCRIBED') resolve();
                 });
             });
 
@@ -2684,6 +3086,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 event: 'message_deleted',
                 payload: { messageId: messageId }
             });
+
+            supabase.removeChannel(channel);
 
             await updateConversationsList();
         });
@@ -2815,7 +3219,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const otherUserId = message.sender_id === currentUser.id ? message.receiver_id : message.sender_id;
 
-        const channel = supabase.channel(`messages-${otherUserId}`, {
+        const channel = supabase.channel(`realtime-messages-${otherUserId}`, {
             config: { broadcast: { self: false } }
         });
 
@@ -2833,6 +3237,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 reactions: reactions
             }
         });
+
+        supabase.removeChannel(channel);
     };
 
     const renderReactions = (messageId, reactions) => {
@@ -2894,107 +3300,131 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     ui.messageForm.onsubmit = async (e) => {
-        if (currentServer) {
-            e.preventDefault();
-            const content = ui.messageInput.value.trim();
-            if (!content) return;
-
-            try {
-                const { data, error } = await supabaseClient.from('server_messages').insert({
-                    server_id: currentServer.id,
-                    user_id: currentUser.id,
-                    content,
-                    created_at: new Date().toISOString()
-                }).select().single();
-
-                if (error) throw error;
-
-                displayServerMessage({ ...data, username: currentUser.username });
-                ui.messageInput.value = '';
-            } catch (error) {
-                console.error('Error sending server message:', error);
-            }
-            return;
-        }
         e.preventDefault();
-
         const content = ui.messageInput.value.trim();
-
         if (!content && pendingFiles.length === 0) {
             return;
         }
 
-        ui.backToFriendsBtn?.addEventListener('click', () => {
-            if (window.innerWidth <= 768) {
-                ui.sidebar.classList.add('open');
-            }
-        });
+        if (currentServer) {
+            const { data, error } = await supabaseClient.from('server_messages').insert({
+                server_id: currentServer.id,
+                user_id: currentUser.id,
+                content,
+                created_at: new Date().toISOString()
+            }).select().single();
 
-        document.addEventListener('click', (e) => {
-            if (window.innerWidth <= 768 && ui.sidebar.classList.contains('open')) {
-                if (!ui.sidebar.contains(e.target) && !ui.bottomNavbar.contains(e.target)) {
-                    ui.sidebar.classList.remove('open');
-                }
-            }
-        });
+            if (error) throw error;
 
-        document.querySelectorAll('.navbar-btn').forEach(btn => {
-            btn.addEventListener('click', () => {
-                if (window.innerWidth <= 768) {
-                    ui.sidebar.classList.add('open');
-                }
-            });
-        });
+            displayServerMessage({ ...data, username: currentUser.username });
+            ui.messageInput.value = '';
+            return;
+        }
 
-        const messageData = {
-            content,
+        let messageData = {
             sender_id: currentUser.id,
             receiver_id: currentChatFriend.id,
             created_at: new Date().toISOString()
         };
+
+        if (pendingFiles.length > 0) {
+            const uploadedFiles = [];
+
+            for (const file of pendingFiles) {
+                try {
+                    const fileExt = file.name.split('.').pop();
+                    const fileName = `${Date.now()}-${currentUser.id}-${Math.random().toString(36).substr(2, 9)}.${fileExt}`;
+                    const { data: uploadData, error: uploadError } = await supabase.storage
+                        .from('files')
+                        .upload(fileName, file, {
+                            cacheControl: '3600',
+                            upsert: false
+                        });
+
+                    if (uploadError) {
+                        continue;
+                    }
+                    if (uploadData) {
+                        const { data: { publicUrl } } = supabase.storage
+                            .from('files')
+                            .getPublicUrl(fileName);
+                        uploadedFiles.push({
+                            url: publicUrl,
+                            name: file.name,
+                            type: file.type,
+                            size: file.size
+                        });
+                    }
+                } catch (error) {
+                }
+            }
+            if (uploadedFiles.length > 0) {
+                messageData.files = uploadedFiles;
+            }
+
+            pendingFiles = [];
+            renderFilePreview();
+        }
+
+        if (content) {
+            const recipientPublicKeyStr = currentChatFriend.public_key;
+
+            if (recipientPublicKeyStr && userKeys.privateKey && userKeys.publicKey) {
+                try {
+                    const recipientPublicKey = await CryptoHelper.importPublicKey(recipientPublicKeyStr);
+
+                    const encryptedForRecipient = await CryptoHelper.encryptMessage(content, recipientPublicKey);
+                    messageData.encrypted_content = encryptedForRecipient.encryptedMessage;
+                    messageData.encrypted_key = encryptedForRecipient.encryptedKey;
+                    messageData.iv = encryptedForRecipient.iv;
+
+                    const encryptedForSender = await CryptoHelper.encryptMessage(content, userKeys.publicKey);
+                    messageData.sender_encrypted_content = encryptedForSender.encryptedMessage;
+                    messageData.sender_encrypted_key = encryptedForSender.encryptedKey;
+                    messageData.sender_iv = encryptedForSender.iv;
+
+                    messageData.is_encrypted = true;
+                    messageData.content = '';
+                } catch (error) {
+                    messageData.content = content;
+                    messageData.is_encrypted = false;
+                }
+            } else {
+                messageData.content = content;
+                messageData.is_encrypted = false;
+            }
+        } else if (pendingFiles.length === 0) {
+            return;
+        }
 
         if (replyingTo) {
             messageData.reply_to_id = replyingTo.id;
             messageData.reply_to_content = replyingTo.content;
         }
 
-        if (pendingFiles.length > 0) {
-            const file = pendingFiles[0];
-            const fileExt = file.name.split('.').pop();
-            const fileName = `${Date.now()}-${currentUser.id}.${fileExt}`;
-            const filePath = `files/${fileName}`;
-
-            const { data: uploadData } = await supabase.storage
-                .from('files')
-                .upload(filePath, file, { upsert: true });
-
-            if (uploadData) {
-                const { data: { publicUrl } } = supabase.storage
-                    .from('files')
-                    .getPublicUrl(filePath);
-
-                messageData.file_url = publicUrl;
-                messageData.file_type = file.type;
-                messageData.file_name = file.name;
-            }
-
-            pendingFiles = [];
-        }
-
         ui.messageInput.value = '';
         replyingTo = null;
         ui.replyPreview.classList.add('hidden');
-
         const { data: insertedMessage, error } = await supabase
             .from('messages')
             .insert([messageData])
             .select()
             .single();
-
         if (error) {
-            console.error('Message insert error:', error);
             showInfoModal('Error', 'Failed to send message. Please try again.');
             return;
+        }
+
+        if (insertedMessage.is_encrypted && insertedMessage.sender_encrypted_content) {
+            try {
+                insertedMessage.content = await CryptoHelper.decryptMessage({
+                    encryptedMessage: insertedMessage.sender_encrypted_content,
+                    encryptedKey: insertedMessage.sender_encrypted_key,
+                    iv: insertedMessage.sender_iv
+                }, userKeys.privateKey);
+            } catch (error) {
+                insertedMessage.content = '[Unable to decrypt]';
+            }
         }
 
         displayMessage(insertedMessage, currentUser);
@@ -3002,14 +3432,23 @@ document.addEventListener('DOMContentLoaded', () => {
 
         await updateConversationsList();
 
-        const notifyChannel = supabase.channel(`messages-${currentChatFriend.id}`);
-        await notifyChannel.subscribe();
+        const recipientChannel = supabase.channel(`realtime-messages-${currentChatFriend.id}`, {
+            config: { broadcast: { self: false } }
+        });
 
-        await notifyChannel.send({
+        await new Promise((resolve) => {
+            recipientChannel.subscribe((status) => {
+                if (status === 'SUBSCRIBED') resolve();
+            });
+        });
+
+        await recipientChannel.send({
             type: 'broadcast',
             event: 'new_message',
-            payload: { messageId: insertedMessage.id }
+            payload: insertedMessage
         });
+
+        supabase.removeChannel(recipientChannel);
     };
 
     ui.messageInput.addEventListener('keydown', (e) => {
@@ -3051,44 +3490,6 @@ document.addEventListener('DOMContentLoaded', () => {
             }, 2000);
         }
     });
-
-    ui.fileInput.addEventListener('change', async (e) => {
-        const files = Array.from(e.target.files);
-        if (files.length === 0) return;
-
-        pendingFiles = files;
-
-        ui.filePreviewContent.innerHTML = '';
-        files.forEach(file => {
-            const filePreview = document.createElement('div');
-            filePreview.className = 'file-preview-item';
-
-            if (file.type.startsWith('image/')) {
-                const img = document.createElement('img');
-                img.src = URL.createObjectURL(file);
-                img.style.maxWidth = '100%';
-                img.style.maxHeight = '300px';
-                filePreview.appendChild(img);
-            } else {
-                filePreview.innerHTML = `<i class="fa-solid fa-file"></i> ${file.name}`;
-            }
-
-            ui.filePreviewContent.appendChild(filePreview);
-        });
-
-        showModal(ui.filePreviewModal);
-    });
-
-    ui.fileSendForm.onsubmit = async (e) => {
-        e.preventDefault();
-        const caption = ui.fileCaptionInput.value.trim();
-
-        ui.messageInput.value = caption;
-        hideModal();
-        ui.fileCaptionInput.value = '';
-
-        ui.messageForm.dispatchEvent(new Event('submit'));
-    };
 
     ui.addFriendForm.onsubmit = async (e) => {
         e.preventDefault();
@@ -3135,7 +3536,6 @@ document.addEventListener('DOMContentLoaded', () => {
             .single();
 
         if (error) {
-            console.error('Error sending friend request:', error);
             showInfoModal('Error', 'Failed to send friend request.');
             return;
         }
@@ -3259,7 +3659,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     }]);
 
                 if (error) {
-                    console.error('Error blocking user:', error);
                     showInfoModal('Error', 'Failed to block user.');
                     return;
                 }
@@ -3303,7 +3702,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 .maybeSingle();
 
             if (profileError && profileError.code !== 'PGRST116') {
-                console.error('Profile lookup error:', profileError);
                 showInfoModal('Error', 'Could not find user. Please try again.');
                 return;
             }
@@ -3319,14 +3717,12 @@ document.addEventListener('DOMContentLoaded', () => {
             });
 
             if (loginError) {
-                console.error('Login error:', loginError);
                 showInfoModal('Invalid credentials', 'Incorrect username or password.');
                 return;
             }
 
             location.reload();
         } catch (error) {
-            console.error('Unexpected error:', error);
             showInfoModal('Error', 'An unexpected error occurred. Please try again.');
         }
     };
@@ -3354,7 +3750,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 .maybeSingle();
 
             if (checkError && checkError.code !== 'PGRST116') {
-                console.error('Check error:', checkError);
                 showInfoModal('Error', 'Could not verify username. Please try again.');
                 return;
             }
@@ -3377,7 +3772,6 @@ document.addEventListener('DOMContentLoaded', () => {
             });
 
             if (signupError) {
-                console.error('Signup error:', signupError);
                 showInfoModal('Signup failed', signupError.message);
                 return;
             }
@@ -3391,13 +3785,11 @@ document.addEventListener('DOMContentLoaded', () => {
                     .eq('id', authData.user.id);
 
                 if (updateError) {
-                    console.error('Profile update error:', updateError);
                 }
 
                 location.reload();
             }
         } catch (error) {
-            console.error('Unexpected error:', error);
             showInfoModal('Error', 'An unexpected error occurred. Please try again.');
         }
     };
@@ -3511,7 +3903,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 });
 
             if (uploadError) {
-                console.error('Upload error:', uploadError);
                 throw new Error(`Upload failed: ${uploadError.message}`);
             }
 
@@ -3525,7 +3916,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 .eq('id', currentUser.id);
 
             if (updateError) {
-                console.error('Profile update error:', updateError);
                 throw new Error(`Profile update failed: ${updateError.message}`);
             }
 
@@ -3556,7 +3946,6 @@ document.addEventListener('DOMContentLoaded', () => {
             showInfoModal('Success', 'Profile picture updated successfully!');
 
         } catch (error) {
-            console.error('Avatar upload error:', error);
             showInfoModal('Upload failed', error.message || 'Could not upload avatar. Please try again.');
             e.target.value = '';
         }
@@ -3588,7 +3977,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 .maybeSingle();
 
             if (checkError && checkError.code !== 'PGRST116') {
-                console.error('Check error:', checkError);
                 showInfoModal('Error', 'Could not verify username. Please try again.');
                 return;
             }
@@ -3635,7 +4023,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 });
             }
         } catch (error) {
-            console.error('Update error:', error);
             showInfoModal('Error', 'Could not update username. Please try again.');
         }
     };
@@ -3670,7 +4057,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         showModal(ui.incomingCallModal);
-        ui.incomingCallAudio.play().catch(err => console.error('Error playing call sound:', err));
 
         call.on('close', () => {
             if (isInCall) {
@@ -3680,7 +4066,6 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
         call.on('error', (err) => {
-            console.error('Incoming call error:', err);
             hideModal();
             ui.incomingCallAudio.pause();
             ui.incomingCallAudio.currentTime = 0;
@@ -3721,7 +4106,6 @@ document.addEventListener('DOMContentLoaded', () => {
             });
 
         } catch (err) {
-            console.error('Error accepting call:', err);
             isInCall = false;
             endCall();
             showInfoModal('Call Error', 'Failed to start call. Please try again.');
@@ -3972,7 +4356,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
             call.on('error', (err) => {
                 clearTimeout(connectionTimeout);
-                console.error('Call error:', err);
                 hideOutgoingCallUI();
                 if (localStream) {
                     localStream.getTracks().forEach(track => track.stop());
@@ -4094,34 +4477,14 @@ document.addEventListener('DOMContentLoaded', () => {
         transform: translateZ(0);
     `;
 
-        video.addEventListener('error', (e) => {
-            console.error('Video error details:', {
-                error: video.error,
-                code: video.error?.code,
-                message: video.error?.message,
-                networkState: video.networkState,
-                readyState: video.readyState
-            });
-        });
-
         const playPromise = video.play();
         if (playPromise !== undefined) {
             playPromise
                 .then(() => {
                 })
                 .catch(err => {
-                    console.error(`❌ ${type} video play() failed:`, err);
-                    console.error('Play error details:', {
-                        name: err.name,
-                        message: err.message,
-                        videoReadyState: video.readyState,
-                        videoPaused: video.paused,
-                        videoMuted: video.muted
-                    });
-
                     if (!video.muted && type === 'remote') {
                         video.muted = true;
-                        video.play().catch(e => console.error('Retry failed:', e));
                     }
                 });
         }
@@ -4165,7 +4528,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 const playAttempt = video.play();
                 if (playAttempt !== undefined) {
                     playAttempt.catch(err => {
-                        console.error(`❌ Error playing ${type} video after state update:`, err);
                     });
                 }
             }
@@ -4406,7 +4768,7 @@ document.addEventListener('DOMContentLoaded', () => {
         document.addEventListener('mouseup', dragEnd);
 
         ui.settingsModalHeader.addEventListener('touchstart', dragStart, { passive: true });
-        document.addEventListener('touchmove', dragMove, { passive: true });
+        document.addEventListener('touchmove', dragMove, { passive: false });
         document.addEventListener('touchend', dragEnd, { passive: true });
 
         ui.settingsModalContainer.addEventListener('click', (e) => {
@@ -4543,5 +4905,5 @@ document.addEventListener('DOMContentLoaded', () => {
             handleRouting();
         }
     }, 1500);
-    setTimeout(addFileButton, 500);
+    setTimeout(initializeFileAttachment, 500);
 });
