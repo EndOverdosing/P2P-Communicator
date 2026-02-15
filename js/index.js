@@ -4935,13 +4935,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const getMobileScreenShareStream = async () => {
         try {
-            const videoTrack = localStream.getVideoTracks()[0];
-            const currentFacingMode = videoTrack.getSettings().facingMode;
-            const newFacingMode = currentFacingMode === 'user' ? 'environment' : 'user';
-
             const constraints = {
                 video: {
-                    facingMode: newFacingMode,
+                    facingMode: 'environment',
                     width: { ideal: 1920 },
                     height: { ideal: 1080 }
                 },
@@ -5021,9 +5017,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (isMobileDevice()) {
                     screenStream = await getMobileScreenShareStream();
                     shareType = 'camera';
+                    showInfoModal('Camera Share Started', 'Using camera to share content. Point your camera at what you want to share.');
                 } else {
                     screenStream = await getDesktopScreenShareStream();
                     shareType = 'screen';
+                    showInfoModal('Screen Share Started', 'Your screen is now being shared.');
                 }
 
                 const screenTrack = screenStream.getVideoTracks()[0];
@@ -5043,10 +5041,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 callState.isScreenSharing = true;
                 ui.shareScreenBtn.classList.add('active');
-
-                if (shareType === 'screen') {
-                    showInfoModal('Screen Share Started', 'Your screen is now being shared.');
-                }
 
                 screenTrack.onended = async () => {
                     try {
