@@ -6841,16 +6841,23 @@ document.addEventListener('DOMContentLoaded', () => {
         ui.settingsModalHeader.addEventListener('touchstart', dragStart, { passive: true });
         document.addEventListener('touchmove', dragMove, { passive: false });
         document.addEventListener('touchend', dragEnd, { passive: true });
-
-        ui.settingsModalContainer.addEventListener('click', (e) => {
-            if (e.target === ui.settingsModalContainer && window.innerWidth > 768) {
-                hideSettingsModal();
-            }
-        });
     };
 
+    ui.settingsModalContainer.addEventListener('click', (e) => {
+        if (e.target === ui.settingsModalContainer) {
+            hideSettingsModal();
+        } else {
+        }
+    });
+
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && ui.settingsModalContainer.classList.contains('visible')) {
+            hideSettingsModal();
+        }
+    });
+
     ui.chatOptionsModal.addEventListener('click', (e) => {
-        if (e.target === ui.chatOptionsModal && window.innerWidth > 768) {
+        if (e.target === ui.chatOptionsModal) {
             hideModal();
         }
     });

@@ -499,6 +499,12 @@ button:disabled:hover {
     flex-direction: column;
     flex-shrink: 0;
     position: relative;
+    margin-left: 20px;
+    border-radius: 40px;
+    height: 90vh;
+    justify-content: center;
+    margin-top: auto;
+    margin-bottom: auto;
 }
 
 .sidebar-header {
@@ -3826,6 +3832,7 @@ body[data-font-size="large"] {
         width: 100%;
         transition: transform 0.3s ease;
         background-color: var(--primary-bg);
+        margin: 0;
     }
 
     #chat-container {
@@ -4581,10 +4588,10 @@ body[data-font-size="large"] {
     font-family: var(--base-font-family);
     font-weight: 600;
     text-decoration: none;
-    z-index: 9999;
+    z-index: 99999999999;
     transition: var(--transition-fast);
-    width: 300px;
     margin-bottom: 60px;
+    width: 300px;
 }
 
 .overlay-logo {
