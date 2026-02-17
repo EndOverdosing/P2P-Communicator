@@ -4601,6 +4601,11 @@ body[data-font-size="large"] {
     transition: var(--transition-fast);
     margin-bottom: 60px;
     width: 300px;
+    opacity: 0.2;
+}
+
+.bottom-overlay:hover {
+    opacity: 1;
 }
 
 .overlay-logo {
