@@ -11,6 +11,7 @@
     --header-text: #2a2a2a;
     --border-color: #b0b0b0;
     --discord-button: rgba(53, 53, 53, 0.2);
+    --message-reacted: #b0b0b0;
     --success: #00ff2a;
     --error: #a30000;
     --warning: #f5c15c;
@@ -41,6 +42,7 @@
     --secondary-text: #B0B0B0;
     --header-text: #FFFFFF;
     --border-color: #323232;
+    --message-reacted: #4f4f4f;
     --success: #00ff2a;
     --error: #a30000;
     --warning: #f5c15c;
@@ -2664,8 +2666,11 @@ body[data-font-size="large"] {
 }
 
 .message-reaction.reacted {
+    background: var(--message-reacted);
+}
+
+.message-reaction.others-reacted {
     background: var(--primary-accent);
-    border-color: var(--primary-accent);
 }
 
 .message-image {
