@@ -1,188 +1,4 @@
 document.addEventListener('DOMContentLoaded', () => {
-    const securityConfig = {
-        maxLoginAttempts: 5,
-        lockoutDuration: 900000,
-        rateLimits: {
-            messages: { limit: 100, window: 60000 },
-            friendRequests: { limit: 10, window: 300000 },
-            apiCalls: { limit: 200, window: 60000 }
-        }
-    };
-
-    const botDetection = {
-        minFormTime: 3000,
-        maxFormTime: 300000,
-        mouseMovements: 0,
-        keystrokes: 0,
-
-        initFormTracking(formId) {
-            const form = document.getElementById(formId);
-            if (!form) return;
-
-            const timestamp = document.getElementById('signup-timestamp');
-            if (timestamp) timestamp.value = Date.now();
-
-            this.mouseMovements = 0;
-            this.keystrokes = 0;
-
-            const trackMouse = () => this.mouseMovements++;
-            const trackKeys = () => this.keystrokes++;
-
-            form.addEventListener('mousemove', trackMouse);
-            form.addEventListener('keydown', trackKeys);
-
-            form._cleanup = () => {
-                form.removeEventListener('mousemove', trackMouse);
-                form.removeEventListener('keydown', trackKeys);
-            };
-        },
-
-        validateFormSubmission(formId) {
-            const form = document.getElementById(formId);
-            if (!form) return false;
-
-            const honeypotWebsite = form.querySelector('[name="website"]');
-            const honeypotEmail = form.querySelector('[name="email_confirm"]');
-
-            if (honeypotWebsite?.value || honeypotEmail?.value) {
-                return false;
-            }
-
-            const timestamp = document.getElementById('signup-timestamp');
-            if (timestamp?.value) {
-                const timeSpent = Date.now() - parseInt(timestamp.value);
-                if (timeSpent < this.minFormTime || timeSpent > this.maxFormTime) {
-                    return false;
-                }
-            }
-
-            if (this.mouseMovements < 3 && this.keystrokes < 10) {
-                return false;
-            }
-
-            return true;
-        },
-
-        cleanup(formId) {
-            const form = document.getElementById(formId);
-            if (form?._cleanup) {
-                form._cleanup();
-                delete form._cleanup;
-            }
-        }
-    };
-
-    function generateFingerprint() {
-        const canvas = document.createElement('canvas');
-        const ctx = canvas.getContext('2d');
-        ctx.textBaseline = 'top';
-        ctx.font = '14px Arial';
-        ctx.fillText('fingerprint', 2, 2);
-        const canvasData = canvas.toDataURL();
-
-        const fingerprint = {
-            canvas: canvasData.slice(-50),
-            screen: `${screen.width}x${screen.height}x${screen.colorDepth}`,
-            timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-            language: navigator.language,
-            platform: navigator.platform,
-            vendor: navigator.vendor,
-            plugins: Array.from(navigator.plugins || []).map(p => p.name).slice(0, 3).join(','),
-            touch: 'ontouchstart' in window,
-            cores: navigator.hardwareConcurrency || 0
-        };
-
-        const str = JSON.stringify(fingerprint);
-        let hash = 0;
-        for (let i = 0; i < str.length; i++) {
-            const char = str.charCodeAt(i);
-            hash = ((hash << 5) - hash) + char;
-            hash = hash & hash;
-        }
-        return Math.abs(hash).toString(36);
-    }
-
-    const sessionFingerprint = generateFingerprint();
-    const suspiciousActions = new Map();
-
-    function trackSuspiciousActivity(userId, action) {
-        const key = `${userId}_${action}`;
-        const now = Date.now();
-        const activities = suspiciousActions.get(key) || [];
-
-        activities.push(now);
-
-        const recentActivities = activities.filter(time => now - time < 60000);
-        suspiciousActions.set(key, recentActivities);
-
-        if (recentActivities.length > 20) {
-            return false;
-        }
-
-        return true;
-    }
-
-    const rateLimiters = new Map();
-    const loginAttempts = new Map();
-
-    function checkRateLimit(key, type) {
-        const config = securityConfig.rateLimits[type];
-        if (!config) return true;
-
-        const now = Date.now();
-        const limiter = rateLimiters.get(key) || { count: 0, resetTime: now + config.window };
-
-        if (now > limiter.resetTime) {
-            limiter.count = 0;
-            limiter.resetTime = now + config.window;
-        }
-
-        if (limiter.count >= config.limit) {
-            const waitTime = Math.ceil((limiter.resetTime - now) / 1000);
-            showInfo('Rate Limited', `Please wait ${waitTime} seconds before trying again.`);
-            return false;
-        }
-
-        limiter.count++;
-        rateLimiters.set(key, limiter);
-        return true;
-    }
-
-    function sanitizeInput(input) {
-        const div = document.createElement('div');
-        div.textContent = input;
-        return div.innerHTML.replace(/[<>\"']/g, char => {
-            const entities = { '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
-            return entities[char];
-        });
-    }
-
-    function validateUsername(username) {
-        const regex = /^[a-zA-Z0-9_-]{3,20}$/;
-        return regex.test(username);
-    }
-
-    function validatePassword(password) {
-        return password.length >= 8 &&
-            /[A-Z]/.test(password) &&
-            /[a-z]/.test(password) &&
-            /[0-9]/.test(password);
-    }
-
-    async function verifyHCaptcha(token) {
-        try {
-            const response = await fetch('/api/verify-captcha', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ token })
-            });
-            const data = await response.json();
-            return data.success;
-        } catch {
-            return false;
-        }
-    }
-
     const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
     const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
@@ -743,7 +559,10 @@ document.addEventListener('DOMContentLoaded', () => {
                             const { data: friendshipsToDelete, error: fetchError } = await supabase
                                 .from('friendships')
                                 .select('*')
-                                .or(`and(user_id.eq.${currentUser.id},friend_id.eq.${removedFriendId}),and(user_id.eq.${removedFriendId},friend_id.eq.${currentUser.id})`);
+                                .or(`user_id.eq.${currentUser.id},friend_id.eq.${currentUser.id}`)
+                                .or(`user_id.eq.${removedFriendId},friend_id.eq.${removedFriendId}`)
+                                .in('user_id', [currentUser.id, removedFriendId])
+                                .in('friend_id', [currentUser.id, removedFriendId]);
 
                             if (fetchError) {
                                 throw fetchError;
@@ -3113,7 +2932,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    function renderAllMessages(messages) {
+    const renderAllMessages = (messages) => {
         ui.messagesContainer.innerHTML = '';
 
         if (messages.length === 0) return;
@@ -3132,7 +2951,7 @@ document.addEventListener('DOMContentLoaded', () => {
         requestAnimationFrame(() => {
             scrollToBottom();
         });
-    }
+    };
 
     function renderAllServerMessages(messages, userMap) {
         ui.messagesContainer.innerHTML = '';
@@ -3205,6 +3024,23 @@ document.addEventListener('DOMContentLoaded', () => {
         const isMobile = window.innerWidth <= 768;
         const isSent = message.sender_id === currentUser.id;
 
+        const avatarDiv = document.createElement('div');
+        avatarDiv.className = 'message-avatar';
+        if (sender.avatar_url) {
+            avatarDiv.innerHTML = `<img src="${sender.avatar_url}" alt="${sender.username}">`;
+        } else {
+            avatarDiv.textContent = sender.username[0].toUpperCase();
+        }
+
+        const usernameDiv = document.createElement('div');
+        usernameDiv.className = 'message-username';
+        usernameDiv.textContent = sender.username;
+
+        const avatarWrapper = document.createElement('div');
+        avatarWrapper.className = 'message-avatar-wrapper';
+        avatarWrapper.appendChild(avatarDiv);
+        avatarWrapper.appendChild(usernameDiv);
+
         const contentWrapper = document.createElement('div');
         contentWrapper.style.cssText = isMobile ? 'position: relative;' : '';
 
@@ -3237,11 +3073,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 const isAudio = file.type.startsWith('audio/') || file.name.match(/\.(mp3|wav|ogg|m4a|flac|aac)$/i);
 
                 if (isImage) {
+                    const proxyUrl = file.url.replace('https://mfjqbejulpkuoutgeuuw.supabase.co/', 'http://localhost:3000/');
                     const img = document.createElement('img');
-                    img.src = file.url;
+                    img.src = proxyUrl;
                     img.alt = file.name;
                     img.className = 'message-image';
-                    img.onclick = () => window.openImageFullscreen(file.url);
+                    img.onclick = () => window.openImageFullscreen(proxyUrl);
                     contentWrapper.appendChild(img);
                 } else if (isVideo) {
                     const video = document.createElement('video');
@@ -3250,12 +3087,73 @@ document.addEventListener('DOMContentLoaded', () => {
                     video.style.cssText = 'max-width: 300px; border-radius: var(--button-border-radius); margin: 0.5rem 0;';
                     contentWrapper.appendChild(video);
                 } else if (isAudio) {
+                    const audioWrapper = document.createElement('div');
+                    audioWrapper.className = 'custom-audio-player';
+
                     const audio = document.createElement('audio');
-                    audio.controls = true;
                     audio.src = file.url;
-                    audio.className = 'message-audio';
-                    audio.style.cssText = 'max-width: 100%; margin: 0.5rem 0;';
-                    contentWrapper.appendChild(audio);
+                    audio.preload = 'metadata';
+
+                    const playBtn = document.createElement('button');
+                    playBtn.className = 'audio-play-btn';
+                    playBtn.innerHTML = '<i class="fa-solid fa-play"></i>';
+
+                    const progressWrapper = document.createElement('div');
+                    progressWrapper.className = 'audio-progress-wrapper';
+
+                    const progressBar = document.createElement('div');
+                    progressBar.className = 'audio-progress-bar';
+
+                    const progressFill = document.createElement('div');
+                    progressFill.className = 'audio-progress-fill';
+
+                    progressBar.appendChild(progressFill);
+                    progressWrapper.appendChild(progressBar);
+
+                    const timeDisplay = document.createElement('div');
+                    timeDisplay.className = 'audio-time';
+                    timeDisplay.textContent = '0:00';
+
+                    audioWrapper.appendChild(playBtn);
+                    audioWrapper.appendChild(progressWrapper);
+                    audioWrapper.appendChild(timeDisplay);
+
+                    audio.addEventListener('loadedmetadata', () => {
+                        const mins = Math.floor(audio.duration / 60);
+                        const secs = Math.floor(audio.duration % 60);
+                        timeDisplay.textContent = `${mins}:${secs.toString().padStart(2, '0')}`;
+                    });
+
+                    audio.addEventListener('timeupdate', () => {
+                        const percent = (audio.currentTime / audio.duration) * 100;
+                        progressFill.style.width = `${percent}%`;
+                        const mins = Math.floor(audio.currentTime / 60);
+                        const secs = Math.floor(audio.currentTime % 60);
+                        timeDisplay.textContent = `${mins}:${secs.toString().padStart(2, '0')}`;
+                    });
+
+                    audio.addEventListener('ended', () => {
+                        playBtn.innerHTML = '<i class="fa-solid fa-play"></i>';
+                        progressFill.style.width = '0%';
+                    });
+
+                    playBtn.onclick = () => {
+                        if (audio.paused) {
+                            audio.play();
+                            playBtn.innerHTML = '<i class="fa-solid fa-pause"></i>';
+                        } else {
+                            audio.pause();
+                            playBtn.innerHTML = '<i class="fa-solid fa-play"></i>';
+                        }
+                    };
+
+                    progressBar.onclick = (e) => {
+                        const rect = progressBar.getBoundingClientRect();
+                        const percent = (e.clientX - rect.left) / rect.width;
+                        audio.currentTime = percent * audio.duration;
+                    };
+
+                    contentWrapper.appendChild(audioWrapper);
                 } else {
                     const icon = getFileIcon(file.type, file.name);
                     const fileLink = document.createElement('a');
@@ -3272,11 +3170,12 @@ document.addEventListener('DOMContentLoaded', () => {
         if (message.file_url) {
             const fileType = message.file_type || 'file';
             if (fileType.startsWith('image/')) {
+                const proxyUrl = message.file_url.replace('https://mfjqbejulpkuoutgeuuw.supabase.co/', 'http://localhost:3000/');
                 const img = document.createElement('img');
-                img.src = message.file_url;
+                img.src = proxyUrl;
                 img.alt = 'Image';
                 img.className = 'message-image';
-                img.onclick = () => window.openImageFullscreen(message.file_url);
+                img.onclick = () => window.openImageFullscreen(proxyUrl);
                 img.style.cssText = 'max-width: 300px; border-radius: var(--button-border-radius); cursor: pointer; display: block;';
                 contentWrapper.appendChild(img);
             } else if (fileType.startsWith('audio/')) {
@@ -3384,11 +3283,13 @@ document.addEventListener('DOMContentLoaded', () => {
             ${isSent ? 'right: 0.5rem;' : 'left: 0.5rem;'}
         `;
 
+            messageDiv.appendChild(avatarWrapper);
             messageDiv.appendChild(contentWrapper);
             messageDiv.appendChild(timestampDiv);
 
             setupMessageSwipe(contentWrapper, isSent);
         } else {
+            messageDiv.appendChild(avatarWrapper);
             messageDiv.appendChild(contentWrapper);
 
             const timestampDiv = document.createElement('div');
@@ -3398,9 +3299,8 @@ document.addEventListener('DOMContentLoaded', () => {
             font-size: 0.7rem;
             color: var(--secondary-text);
             margin-top: 0.25rem;
-            text-align: ${isSent ? 'right' : 'left'};
         `;
-            messageDiv.appendChild(timestampDiv);
+            contentWrapper.appendChild(timestampDiv);
         }
 
         messageDiv.addEventListener('contextmenu', (e) => {
@@ -3458,6 +3358,23 @@ document.addEventListener('DOMContentLoaded', () => {
         const isMobile = window.innerWidth <= 768;
         const isSent = msg.user_id === currentUser.id;
 
+        const avatarDiv = document.createElement('div');
+        avatarDiv.className = 'message-avatar';
+        if (msg.avatar_url) {
+            avatarDiv.innerHTML = `<img src="${msg.avatar_url}" alt="${username}">`;
+        } else {
+            avatarDiv.textContent = username[0].toUpperCase();
+        }
+
+        const usernameDiv = document.createElement('div');
+        usernameDiv.className = 'message-username';
+        usernameDiv.textContent = username;
+
+        const avatarWrapper = document.createElement('div');
+        avatarWrapper.className = 'message-avatar-wrapper';
+        avatarWrapper.appendChild(avatarDiv);
+        avatarWrapper.appendChild(usernameDiv);
+
         const contentWrapper = document.createElement('div');
         contentWrapper.style.cssText = isMobile ? 'position: relative;' : '';
 
@@ -3490,11 +3407,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 const isAudio = file.type.startsWith('audio/') || file.name.match(/\.(mp3|wav|ogg|m4a|flac|aac)$/i);
 
                 if (isImage) {
+                    const proxyUrl = file.url.replace('https://mfjqbejulpkuoutgeuuw.supabase.co/', 'http://localhost:3000/');
                     const img = document.createElement('img');
-                    img.src = file.url;
+                    img.src = proxyUrl;
                     img.alt = file.name;
                     img.className = 'message-image';
-                    img.onclick = () => window.openImageFullscreen(file.url);
+                    img.onclick = () => window.openImageFullscreen(proxyUrl);
                     contentWrapper.appendChild(img);
                 } else if (isVideo) {
                     const video = document.createElement('video');
@@ -3600,8 +3518,8 @@ document.addEventListener('DOMContentLoaded', () => {
             const timestampDiv = document.createElement('div');
             timestampDiv.className = 'message-timestamp';
             timestampDiv.textContent = timestamp;
-            timestampDiv.style.cssText = `font-size: 0.7rem; color: var(--secondary-text); margin-top: 0.25rem; text-align: ${isSent ? 'right' : 'left'};`;
-            messageDiv.appendChild(timestampDiv);
+            timestampDiv.style.cssText = `font-size: 0.7rem; color: var(--secondary-text); margin-top: 0.25rem;`;
+            contentWrapper.appendChild(timestampDiv);
         }
 
         messageDiv.addEventListener('contextmenu', (e) => {
@@ -3609,6 +3527,14 @@ document.addEventListener('DOMContentLoaded', () => {
             e.stopPropagation();
             showMessageContextMenu(e, msg);
         });
+
+        avatarDiv.className = 'message-avatar';
+        if (msg.avatar_url) {
+            avatarDiv.innerHTML = `<img src="${msg.avatar_url}" alt="${username}">`;
+        } else {
+            avatarDiv.textContent = username[0].toUpperCase();
+        }
+        messageDiv.insertBefore(avatarWrapper, messageDiv.firstChild);
 
         let lastTap = 0;
         const DOUBLE_TAP_DELAY = 300;
@@ -3675,30 +3601,45 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const setupMessageSwipe = (element, isSent) => {
         let startX = 0;
+        let startY = 0;
         let currentX = 0;
         let isDragging = false;
 
         element.addEventListener('touchstart', (e) => {
             startX = e.touches[0].clientX;
+            startY = e.touches[0].clientY;
             isDragging = true;
         });
 
         element.addEventListener('touchmove', (e) => {
             if (!isDragging) {
-                e.preventDefault();
                 return;
             }
-            e.preventDefault();
+
             currentX = e.touches[0].clientX;
-            const diff = currentX - startX;
+            const currentY = e.touches[0].clientY;
+            const deltaX = currentX - startX;
+            const deltaY = currentY - startY;
+
+            if (Math.abs(deltaX) > Math.abs(deltaY)) {
+                e.preventDefault();
+            } else {
+                return;
+            }
 
             const maxSwipe = 80;
 
-            const swipeAmount = isSent ? Math.min(Math.max(diff, -maxSwipe), 0) : Math.max(Math.min(diff, maxSwipe), 0);
+            const swipeAmount = isSent ? Math.min(Math.max(deltaX, -maxSwipe), 0) : Math.max(Math.min(deltaX, maxSwipe), 0);
 
             element.style.transform = `translateX(${swipeAmount}px)`;
 
-            const timestamp = element.parentElement.querySelector('.message-timestamp-reveal');
+            const messageDiv = element.parentElement;
+            const avatar = messageDiv.querySelector('.message-avatar');
+            if (avatar) {
+                avatar.style.transform = `translateX(${swipeAmount}px)`;
+            }
+
+            const timestamp = messageDiv.querySelector('.message-timestamp-reveal');
             if (timestamp) {
                 timestamp.style.opacity = Math.abs(swipeAmount) / maxSwipe;
             }
@@ -3708,7 +3649,17 @@ document.addEventListener('DOMContentLoaded', () => {
             isDragging = false;
             element.style.transform = 'translateX(0)';
 
-            const timestamp = element.parentElement.querySelector('.message-timestamp-reveal');
+            const messageDiv = element.parentElement;
+            const avatar = messageDiv.querySelector('.message-avatar');
+            if (avatar) {
+                avatar.style.transition = 'transform 0.3s ease';
+                avatar.style.transform = 'translateX(0)';
+                setTimeout(() => {
+                    avatar.style.transition = '';
+                }, 300);
+            }
+
+            const timestamp = messageDiv.querySelector('.message-timestamp-reveal');
             if (timestamp) {
                 timestamp.style.opacity = 0;
             }
@@ -4471,385 +4422,7 @@ document.addEventListener('DOMContentLoaded', () => {
         audio.play().catch(() => { });
     };
 
-    ui.messageForm.onsubmit = async (e) => {
-        e.preventDefault();
 
-        const messageKey = `msg_${currentUser.id}_${sessionFingerprint}`;
-        if (!checkRateLimit(messageKey, 'messages')) return;
-
-        if (!trackSuspiciousActivity(currentUser.id, 'message')) {
-            showInfo('Slow Down', 'You are sending messages too quickly.');
-            return;
-        }
-
-        if (isCurrentlyTyping && currentTypingChannel) {
-            isCurrentlyTyping = false;
-            await currentTypingChannel.send({
-                type: 'broadcast',
-                event: 'typing',
-                payload: { userId: currentUser.id, isTyping: false }
-            });
-        }
-
-        const content = ui.messageInput.value.trim();
-        if (!content && pendingFiles.length === 0) {
-            return;
-        }
-
-        if (currentServer) {
-            let messageData = {
-                server_id: currentServer.id,
-                user_id: currentUser.id,
-                content,
-                created_at: new Date().toISOString()
-            };
-
-            if (replyingTo && replyingTo.type === 'server') {
-                messageData.reply_to_id = replyingTo.id;
-                messageData.reply_to_content = replyingTo.content;
-            }
-
-            if (pendingFiles.length > 0) {
-                const filePreview = document.getElementById('file-attachment-preview');
-                if (!filePreview) return;
-
-                const uploadedFiles = [];
-                const totalFiles = pendingFiles.length;
-
-                for (let i = 0; i < pendingFiles.length; i++) {
-                    const file = pendingFiles[i];
-                    const fileItem = filePreview.children[totalFiles - 1 - i];
-
-                    if (fileItem) {
-                        const overlay = document.createElement('div');
-                        overlay.style.cssText = `
-                position: absolute;
-                top: 0;
-                left: 0;
-                right: 0;
-                bottom: 0;
-                background: rgba(0, 0, 0, 0.7);
-                display: flex;
-                flex-direction: column;
-                align-items: center;
-                justify-content: center;
-                border-radius: var(--button-border-radius);
-                z-index: 10;
-            `;
-                        overlay.innerHTML = `
-                <div style="color: white; font-size: 0.75rem; margin-bottom: 0.5rem;">Uploading...</div>
-                <div style="width: 80%; height: 3px; background: rgba(255,255,255,0.3); border-radius: 2px; overflow: hidden;">
-                    <div class="upload-progress-bar" style="height: 100%; background: var(--primary-accent); width: 0%; transition: width 0.3s ease;"></div>
-                </div>
-                <div class="upload-status" style="color: white; font-size: 0.65rem; margin-top: 0.25rem;">0%</div>
-            `;
-                        fileItem.appendChild(overlay);
-
-                        const progressBar = overlay.querySelector('.upload-progress-bar');
-                        const statusText = overlay.querySelector('.upload-status');
-
-                        try {
-                            let fileToUpload = file;
-
-                            if (file.type.startsWith('image/') && file.size > 5 * 1024 * 1024) {
-                                statusText.textContent = 'Compressing...';
-                                await new Promise(resolve => setTimeout(resolve, 200));
-                                fileToUpload = await new Promise((resolve, reject) => {
-                                    const reader = new FileReader();
-                                    reader.onload = (event) => {
-                                        const img = new Image();
-                                        img.onload = () => {
-                                            const canvas = document.createElement('canvas');
-                                            const MAX_WIDTH = 1920;
-                                            const MAX_HEIGHT = 1920;
-                                            let width = img.width;
-                                            let height = img.height;
-
-                                            if (width > height) {
-                                                if (width > MAX_WIDTH) {
-                                                    height *= MAX_WIDTH / width;
-                                                    width = MAX_WIDTH;
-                                                }
-                                            } else {
-                                                if (height > MAX_HEIGHT) {
-                                                    width *= MAX_HEIGHT / height;
-                                                    height = MAX_HEIGHT;
-                                                }
-                                            }
-
-                                            canvas.width = width;
-                                            canvas.height = height;
-                                            const ctx = canvas.getContext('2d');
-                                            ctx.drawImage(img, 0, 0, width, height);
-
-                                            canvas.toBlob((blob) => {
-                                                if (blob) {
-                                                    resolve(new File([blob], file.name, { type: 'image/jpeg' }));
-                                                } else {
-                                                    resolve(file);
-                                                }
-                                            }, 'image/jpeg', 0.8);
-                                        };
-                                        img.onerror = () => resolve(file);
-                                        img.src = event.target.result;
-                                    };
-                                    reader.onerror = () => resolve(file);
-                                    reader.readAsDataURL(file);
-                                });
-                            }
-
-                            progressBar.style.width = '50%';
-                            statusText.textContent = '50%';
-
-                            const fileExt = fileToUpload.name.split('.').pop();
-                            const fileName = `${Date.now()}-${currentUser.id}-${Math.random().toString(36).substr(2, 9)}.${fileExt}`;
-
-                            const { data: uploadData, error: uploadError } = await supabase.storage
-                                .from('files')
-                                .upload(fileName, fileToUpload, {
-                                    cacheControl: '3600',
-                                    upsert: false
-                                });
-
-                            if (uploadError) {
-                                statusText.textContent = 'Failed';
-                                progressBar.style.background = 'var(--error)';
-                                await new Promise(resolve => setTimeout(resolve, 1000));
-                                continue;
-                            }
-
-                            if (uploadData) {
-                                const { data: { publicUrl } } = supabase.storage
-                                    .from('files')
-                                    .getPublicUrl(fileName);
-                                uploadedFiles.push({
-                                    url: publicUrl,
-                                    name: file.name,
-                                    type: file.type,
-                                    size: file.size
-                                });
-
-                                progressBar.style.width = '100%';
-                                statusText.textContent = '100%';
-                                await new Promise(resolve => setTimeout(resolve, 300));
-                            }
-                        } catch (error) {
-                            statusText.textContent = 'Error';
-                            progressBar.style.background = 'var(--error)';
-                            await new Promise(resolve => setTimeout(resolve, 1000));
-                        }
-                    }
-                }
-
-                if (uploadedFiles.length > 0) {
-                    messageData.files = uploadedFiles;
-                }
-
-                pendingFiles = [];
-                renderFilePreview();
-            }
-
-            const { data, error } = await supabaseClient.from('server_messages').insert(messageData).select().single();
-
-            if (error) throw error;
-
-            ui.messageInput.value = '';
-            return;
-        }
-
-        let messageData = {
-            sender_id: currentUser.id,
-            receiver_id: currentChatFriend.id,
-            created_at: new Date().toISOString()
-        };
-
-        if (pendingFiles.length > 0) {
-            const filePreview = document.getElementById('file-attachment-preview');
-            if (!filePreview) return;
-
-            const uploadedFiles = [];
-            const totalFiles = pendingFiles.length;
-
-            for (let i = 0; i < pendingFiles.length; i++) {
-                const file = pendingFiles[i];
-                const fileItem = filePreview.children[totalFiles - 1 - i];
-
-                if (fileItem) {
-                    const overlay = document.createElement('div');
-                    overlay.style.cssText = `
-                position: absolute;
-                top: 0;
-                left: 0;
-                right: 0;
-                bottom: 0;
-                background: rgba(0, 0, 0, 0.7);
-                display: flex;
-                flex-direction: column;
-                align-items: center;
-                justify-content: center;
-                border-radius: var(--button-border-radius);
-                z-index: 10;
-            `;
-                    overlay.innerHTML = `
-                <div style="color: white; font-size: 0.75rem; margin-bottom: 0.5rem;">Uploading...</div>
-                <div style="width: 80%; height: 3px; background: rgba(255,255,255,0.3); border-radius: 2px; overflow: hidden;">
-                    <div class="upload-progress-bar" style="height: 100%; background: var(--primary-accent); width: 0%; transition: width 0.3s ease;"></div>
-                </div>
-                <div class="upload-status" style="color: white; font-size: 0.65rem; margin-top: 0.25rem;">0%</div>
-            `;
-                    fileItem.appendChild(overlay);
-
-                    const progressBar = overlay.querySelector('.upload-progress-bar');
-                    const statusText = overlay.querySelector('.upload-status');
-
-                    try {
-                        let fileToUpload = file;
-
-                        if (file.type.startsWith('image/') && file.size > 5 * 1024 * 1024) {
-                            statusText.textContent = 'Compressing...';
-                            await new Promise(resolve => setTimeout(resolve, 200));
-                            fileToUpload = await new Promise((resolve, reject) => {
-                                const reader = new FileReader();
-                                reader.onload = (event) => {
-                                    const img = new Image();
-                                    img.onload = () => {
-                                        const canvas = document.createElement('canvas');
-                                        const MAX_WIDTH = 1920;
-                                        const MAX_HEIGHT = 1920;
-                                        let width = img.width;
-                                        let height = img.height;
-
-                                        if (width > height) {
-                                            if (width > MAX_WIDTH) {
-                                                height *= MAX_WIDTH / width;
-                                                width = MAX_WIDTH;
-                                            }
-                                        } else {
-                                            if (height > MAX_HEIGHT) {
-                                                width *= MAX_HEIGHT / height;
-                                                height = MAX_HEIGHT;
-                                            }
-                                        }
-
-                                        canvas.width = width;
-                                        canvas.height = height;
-                                        const ctx = canvas.getContext('2d');
-                                        ctx.drawImage(img, 0, 0, width, height);
-
-                                        canvas.toBlob((blob) => {
-                                            if (blob) {
-                                                resolve(new File([blob], file.name, { type: 'image/jpeg' }));
-                                            } else {
-                                                resolve(file);
-                                            }
-                                        }, 'image/jpeg', 0.8);
-                                    };
-                                    img.onerror = () => resolve(file);
-                                    img.src = event.target.result;
-                                };
-                                reader.onerror = () => resolve(file);
-                                reader.readAsDataURL(file);
-                            });
-                        }
-
-                        progressBar.style.width = '50%';
-                        statusText.textContent = '50%';
-
-                        const fileExt = fileToUpload.name.split('.').pop();
-                        const fileName = `${Date.now()}-${currentUser.id}-${Math.random().toString(36).substr(2, 9)}.${fileExt}`;
-
-                        const { data: uploadData, error: uploadError } = await supabase.storage
-                            .from('files')
-                            .upload(fileName, fileToUpload, {
-                                cacheControl: '3600',
-                                upsert: false
-                            });
-
-                        if (uploadError) {
-                            statusText.textContent = 'Failed';
-                            progressBar.style.background = 'var(--error)';
-                            await new Promise(resolve => setTimeout(resolve, 1000));
-                            continue;
-                        }
-
-                        if (uploadData) {
-                            const { data: { publicUrl } } = supabase.storage
-                                .from('files')
-                                .getPublicUrl(fileName);
-                            uploadedFiles.push({
-                                url: publicUrl,
-                                name: file.name,
-                                type: file.type,
-                                size: file.size
-                            });
-
-                            progressBar.style.width = '100%';
-                            statusText.textContent = '100%';
-                            await new Promise(resolve => setTimeout(resolve, 300));
-                        }
-                    } catch (error) {
-                        statusText.textContent = 'Error';
-                        progressBar.style.background = 'var(--error)';
-                        await new Promise(resolve => setTimeout(resolve, 1000));
-                    }
-                }
-            }
-
-            if (uploadedFiles.length > 0) {
-                messageData.files = uploadedFiles;
-            } else {
-                showInfoModal('Upload Failed', 'Failed to upload files. Please try again.');
-                return;
-            }
-
-            pendingFiles = [];
-            renderFilePreview();
-        }
-
-        if (content) {
-            messageData.content = content;
-        } else if (!messageData.files || messageData.files.length === 0) {
-            return;
-        }
-
-        if (replyingTo) {
-            messageData.reply_to_id = replyingTo.id;
-            messageData.reply_to_content = replyingTo.content;
-        }
-
-        ui.messageInput.value = '';
-        replyingTo = null;
-        ui.replyPreview.classList.add('hidden');
-
-        const { data: insertedMessage, error } = await supabase
-            .from('messages')
-            .insert([messageData])
-            .select()
-            .single();
-
-        if (error) {
-            showInfoModal('Error', 'Failed to send message. Please try again.');
-            return;
-        }
-        displayMessage(insertedMessage, currentUser);
-        scrollToBottom();
-
-        await updateConversationsList();
-        const recipientChannel = supabase.channel(`messages-${currentChatFriend.id}`);
-
-        await new Promise((resolve) => {
-            recipientChannel.subscribe((status) => {
-                if (status === 'SUBSCRIBED') resolve();
-            });
-        });
-
-        await recipientChannel.send({
-            type: 'broadcast',
-            event: 'new_message',
-            payload: { messageId: insertedMessage.id }
-        });
-        supabase.removeChannel(recipientChannel);
-    };
 
     ui.messageInput.addEventListener('keydown', (e) => {
         if (e.key === 'Enter' && !e.shiftKey) {
@@ -5000,26 +4573,397 @@ document.addEventListener('DOMContentLoaded', () => {
         showModal(ui.blockedUsersModal);
     });
 
+    ui.messageForm.onsubmit = async (e) => {
+        e.preventDefault();
+
+        if (!advancedRateLimit(currentUser.id, 'messages', 10, 10)) {
+            showInfoModal('Rate Limit', 'Please slow down. You can send up to 10 messages every 10 seconds.');
+            return;
+        }
+
+        if (isCurrentlyTyping && currentTypingChannel) {
+            isCurrentlyTyping = false;
+            await currentTypingChannel.send({
+                type: 'broadcast',
+                event: 'typing',
+                payload: { userId: currentUser.id, isTyping: false }
+            });
+        }
+
+        const rawContent = ui.messageInput.value.trim();
+        const content = sanitizeHTML(rawContent);
+
+        if (!validateMessageContent(content) && pendingFiles.length === 0) {
+            if (content.length > securityConfig.maxMessageLength) {
+                showInfoModal('Message too long', `Messages must be under ${securityConfig.maxMessageLength} characters.`);
+            } else {
+                showInfoModal('Invalid content', 'Message contains invalid content.');
+            }
+            return;
+        }
+
+        if (!content && pendingFiles.length === 0) {
+            return;
+        }
+
+        if (currentServer) {
+            let messageData = {
+                server_id: currentServer.id,
+                user_id: currentUser.id,
+                content: content || null,
+                created_at: new Date().toISOString()
+            };
+
+            if (replyingTo && replyingTo.type === 'server') {
+                messageData.reply_to_id = replyingTo.id;
+                messageData.reply_to_content = sanitizeHTML(replyingTo.content);
+            }
+
+            if (pendingFiles.length > 0) {
+                const validFiles = pendingFiles.filter(f => validateInput.file(f));
+                if (validFiles.length !== pendingFiles.length) {
+                    showInfoModal('Invalid Files', 'Some files were rejected due to size or type restrictions.');
+                    pendingFiles = validFiles;
+                    renderFilePreview();
+                    return;
+                }
+
+                const filePreview = document.getElementById('file-attachment-preview');
+                if (!filePreview) return;
+
+                const uploadedFiles = [];
+                const totalFiles = pendingFiles.length;
+
+                for (let i = 0; i < pendingFiles.length; i++) {
+                    const file = pendingFiles[i];
+                    const fileItem = filePreview.children[totalFiles - 1 - i];
+
+                    if (fileItem) {
+                        const overlay = document.createElement('div');
+                        overlay.style.cssText = `position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0, 0, 0, 0.7); display: flex; flex-direction: column; align-items: center; justify-content: center; border-radius: var(--button-border-radius); z-index: 10;`;
+                        overlay.innerHTML = `<div style="color: white; font-size: 0.75rem; margin-bottom: 0.5rem;">Uploading...</div><div style="width: 80%; height: 3px; background: rgba(255,255,255,0.3); border-radius: 2px; overflow: hidden;"><div class="upload-progress-bar" style="height: 100%; background: var(--primary-accent); width: 0%; transition: width 0.3s ease;"></div></div><div class="upload-status" style="color: white; font-size: 0.65rem; margin-top: 0.25rem;">0%</div>`;
+                        fileItem.appendChild(overlay);
+
+                        const progressBar = overlay.querySelector('.upload-progress-bar');
+                        const statusText = overlay.querySelector('.upload-status');
+
+                        try {
+                            let fileToUpload = file;
+
+                            if (file.type.startsWith('image/') && file.size > 5 * 1024 * 1024) {
+                                statusText.textContent = 'Compressing...';
+                                await new Promise(resolve => setTimeout(resolve, 200));
+                                fileToUpload = await new Promise((resolve, reject) => {
+                                    const reader = new FileReader();
+                                    reader.onload = (event) => {
+                                        const img = new Image();
+                                        img.onload = () => {
+                                            const canvas = document.createElement('canvas');
+                                            const MAX_WIDTH = 1920;
+                                            const MAX_HEIGHT = 1920;
+                                            let width = img.width;
+                                            let height = img.height;
+
+                                            if (width > height) {
+                                                if (width > MAX_WIDTH) {
+                                                    height *= MAX_WIDTH / width;
+                                                    width = MAX_WIDTH;
+                                                }
+                                            } else {
+                                                if (height > MAX_HEIGHT) {
+                                                    width *= MAX_HEIGHT / height;
+                                                    height = MAX_HEIGHT;
+                                                }
+                                            }
+
+                                            canvas.width = width;
+                                            canvas.height = height;
+                                            const ctx = canvas.getContext('2d');
+                                            ctx.drawImage(img, 0, 0, width, height);
+
+                                            canvas.toBlob((blob) => {
+                                                if (blob) {
+                                                    resolve(new File([blob], file.name, { type: 'image/jpeg' }));
+                                                } else {
+                                                    resolve(file);
+                                                }
+                                            }, 'image/jpeg', 0.8);
+                                        };
+                                        img.onerror = () => resolve(file);
+                                        img.src = event.target.result;
+                                    };
+                                    reader.onerror = () => resolve(file);
+                                    reader.readAsDataURL(file);
+                                });
+                            }
+
+                            progressBar.style.width = '50%';
+                            statusText.textContent = '50%';
+
+                            const fileExt = fileToUpload.name.split('.').pop();
+                            const fileName = `${Date.now()}-${currentUser.id}-${Math.random().toString(36).substr(2, 9)}.${fileExt}`;
+
+                            const { data: uploadData, error: uploadError } = await supabase.storage
+                                .from('files')
+                                .upload(fileName, fileToUpload, {
+                                    cacheControl: '3600',
+                                    upsert: false
+                                });
+
+                            if (uploadError) {
+                                statusText.textContent = 'Failed';
+                                progressBar.style.background = 'var(--error)';
+                                await new Promise(resolve => setTimeout(resolve, 1000));
+                                continue;
+                            }
+
+                            if (uploadData) {
+                                const { data: { publicUrl } } = supabase.storage
+                                    .from('files')
+                                    .getPublicUrl(fileName);
+                                uploadedFiles.push({
+                                    url: publicUrl,
+                                    name: file.name,
+                                    type: file.type,
+                                    size: file.size
+                                });
+
+                                progressBar.style.width = '100%';
+                                statusText.textContent = '100%';
+                                await new Promise(resolve => setTimeout(resolve, 300));
+                            }
+                        } catch (error) {
+                            statusText.textContent = 'Error';
+                            progressBar.style.background = 'var(--error)';
+                            await new Promise(resolve => setTimeout(resolve, 1000));
+                        }
+                    }
+                }
+
+                if (uploadedFiles.length > 0) {
+                    messageData.files = uploadedFiles;
+                }
+
+                pendingFiles = [];
+                renderFilePreview();
+            }
+
+            const { data, error } = await supabaseClient.from('server_messages').insert(messageData).select().single();
+
+            if (error) throw error;
+
+            ui.messageInput.value = '';
+            adjustTextareaHeight();
+            replyingTo = null;
+            ui.replyPreview.classList.add('hidden');
+            return;
+        }
+
+        let messageData = {
+            sender_id: currentUser.id,
+            receiver_id: currentChatFriend.id,
+            created_at: new Date().toISOString()
+        };
+
+        if (pendingFiles.length > 0) {
+            const validFiles = pendingFiles.filter(f => validateInput.file(f));
+            if (validFiles.length !== pendingFiles.length) {
+                showInfoModal('Invalid Files', 'Some files were rejected due to size or type restrictions.');
+                pendingFiles = validFiles;
+                renderFilePreview();
+                return;
+            }
+
+            const filePreview = document.getElementById('file-attachment-preview');
+            if (!filePreview) return;
+
+            const uploadedFiles = [];
+            const totalFiles = pendingFiles.length;
+
+            for (let i = 0; i < pendingFiles.length; i++) {
+                const file = pendingFiles[i];
+                const fileItem = filePreview.children[totalFiles - 1 - i];
+
+                if (fileItem) {
+                    const overlay = document.createElement('div');
+                    overlay.style.cssText = `position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0, 0, 0, 0.7); display: flex; flex-direction: column; align-items: center; justify-content: center; border-radius: var(--button-border-radius); z-index: 10;`;
+                    overlay.innerHTML = `<div style="color: white; font-size: 0.75rem; margin-bottom: 0.5rem;">Uploading...</div><div style="width: 80%; height: 3px; background: rgba(255,255,255,0.3); border-radius: 2px; overflow: hidden;"><div class="upload-progress-bar" style="height: 100%; background: var(--primary-accent); width: 0%; transition: width 0.3s ease;"></div></div><div class="upload-status" style="color: white; font-size: 0.65rem; margin-top: 0.25rem;">0%</div>`;
+                    fileItem.appendChild(overlay);
+
+                    const progressBar = overlay.querySelector('.upload-progress-bar');
+                    const statusText = overlay.querySelector('.upload-status');
+
+                    try {
+                        let fileToUpload = file;
+
+                        if (file.type.startsWith('image/') && file.size > 5 * 1024 * 1024) {
+                            statusText.textContent = 'Compressing...';
+                            await new Promise(resolve => setTimeout(resolve, 200));
+                            fileToUpload = await new Promise((resolve, reject) => {
+                                const reader = new FileReader();
+                                reader.onload = (event) => {
+                                    const img = new Image();
+                                    img.onload = () => {
+                                        const canvas = document.createElement('canvas');
+                                        const MAX_WIDTH = 1920;
+                                        const MAX_HEIGHT = 1920;
+                                        let width = img.width;
+                                        let height = img.height;
+
+                                        if (width > height) {
+                                            if (width > MAX_WIDTH) {
+                                                height *= MAX_WIDTH / width;
+                                                width = MAX_WIDTH;
+                                            }
+                                        } else {
+                                            if (height > MAX_HEIGHT) {
+                                                width *= MAX_HEIGHT / height;
+                                                height = MAX_HEIGHT;
+                                            }
+                                        }
+
+                                        canvas.width = width;
+                                        canvas.height = height;
+                                        const ctx = canvas.getContext('2d');
+                                        ctx.drawImage(img, 0, 0, width, height);
+
+                                        canvas.toBlob((blob) => {
+                                            if (blob) {
+                                                resolve(new File([blob], file.name, { type: 'image/jpeg' }));
+                                            } else {
+                                                resolve(file);
+                                            }
+                                        }, 'image/jpeg', 0.8);
+                                    };
+                                    img.onerror = () => resolve(file);
+                                    img.src = event.target.result;
+                                };
+                                reader.onerror = () => resolve(file);
+                                reader.readAsDataURL(file);
+                            });
+                        }
+
+                        progressBar.style.width = '50%';
+                        statusText.textContent = '50%';
+
+                        const fileExt = fileToUpload.name.split('.').pop();
+                        const fileName = `${Date.now()}-${currentUser.id}-${Math.random().toString(36).substr(2, 9)}.${fileExt}`;
+
+                        const { data: uploadData, error: uploadError } = await supabase.storage
+                            .from('files')
+                            .upload(fileName, fileToUpload, {
+                                cacheControl: '3600',
+                                upsert: false
+                            });
+
+                        if (uploadError) {
+                            statusText.textContent = 'Failed';
+                            progressBar.style.background = 'var(--error)';
+                            await new Promise(resolve => setTimeout(resolve, 1000));
+                            continue;
+                        }
+
+                        if (uploadData) {
+                            const { data: { publicUrl } } = supabase.storage
+                                .from('files')
+                                .getPublicUrl(fileName);
+                            uploadedFiles.push({
+                                url: publicUrl,
+                                name: file.name,
+                                type: file.type,
+                                size: file.size
+                            });
+
+                            progressBar.style.width = '100%';
+                            statusText.textContent = '100%';
+                            await new Promise(resolve => setTimeout(resolve, 300));
+                        }
+                    } catch (error) {
+                        statusText.textContent = 'Error';
+                        progressBar.style.background = 'var(--error)';
+                        await new Promise(resolve => setTimeout(resolve, 1000));
+                    }
+                }
+            }
+
+            if (uploadedFiles.length > 0) {
+                messageData.files = uploadedFiles;
+            } else {
+                showInfoModal('Upload Failed', 'Failed to upload files. Please try again.');
+                return;
+            }
+
+            pendingFiles = [];
+            renderFilePreview();
+        }
+
+        if (content) {
+            messageData.content = content;
+        } else if (!messageData.files || messageData.files.length === 0) {
+            return;
+        }
+
+        if (replyingTo) {
+            messageData.reply_to_id = replyingTo.id;
+            messageData.reply_to_content = sanitizeHTML(replyingTo.content);
+        }
+
+        ui.messageInput.value = '';
+        adjustTextareaHeight();
+        replyingTo = null;
+        ui.replyPreview.classList.add('hidden');
+
+        const { data: insertedMessage, error } = await supabase
+            .from('messages')
+            .insert([messageData])
+            .select()
+            .single();
+
+        if (error) {
+            showInfoModal('Error', 'Failed to send message. Please try again.');
+            return;
+        }
+        displayMessage(insertedMessage, currentUser);
+        scrollToBottom();
+
+        await updateConversationsList();
+        const recipientChannel = supabase.channel(`messages-${currentChatFriend.id}`);
+
+        await new Promise((resolve) => {
+            recipientChannel.subscribe((status) => {
+                if (status === 'SUBSCRIBED') resolve();
+            });
+        });
+
+        await recipientChannel.send({
+            type: 'broadcast',
+            event: 'new_message',
+            payload: { messageId: insertedMessage.id }
+        });
+        supabase.removeChannel(recipientChannel);
+    };
+
     ui.addFriendForm.onsubmit = async (e) => {
         e.preventDefault();
 
-        const friendReqKey = `friend_${currentUser.id}_${sessionFingerprint}`;
-        if (!checkRateLimit(friendReqKey, 'friendRequests')) return;
-
-        if (!trackSuspiciousActivity(currentUser.id, 'friendRequest')) {
-            showInfo('Slow Down', 'Please wait before sending another friend request.');
+        if (!advancedRateLimit(currentUser.id, 'friendRequests', 5, 60)) {
+            showInfoModal('Rate Limit', 'You can only send 5 friend requests per minute.');
             return;
         }
 
-        const username = sanitizeInput(ui.friendUsernameInput.value.trim());
-        if (!username) {
+        const username = sanitizeHTML(ui.friendUsernameInput.value.trim());
+
+        if (!validateInput.username(username)) {
+            showInfoModal('Invalid username', 'Please enter a valid username.');
             return;
         }
+
         const { data: targetUser } = await supabase
             .from('profiles')
             .select('*')
             .eq('username', username)
             .single();
+
         if (!targetUser) {
             showInfoModal('User not found', 'The username you entered does not exist.');
             return;
@@ -5029,34 +4973,41 @@ document.addEventListener('DOMContentLoaded', () => {
             showInfoModal('Cannot add yourself', 'You cannot add yourself as a friend.');
             return;
         }
+
         const { data: iBlockedThem } = await supabase
             .from('blocked_users')
             .select('*')
             .eq('user_id', currentUser.id)
             .eq('blocked_user_id', targetUser.id)
             .maybeSingle();
+
         if (iBlockedThem) {
             showInfoModal('User blocked', 'You have blocked this user. Unblock them first to send a friend request.');
             return;
         }
+
         const { data: canSend, error: rpcError } = await supabase
             .rpc('check_can_send_friend_request', {
                 sender_id: currentUser.id,
                 receiver_id: targetUser.id
             });
+
         if (rpcError || !canSend) {
-            showInfoModal('User has blocked you', 'This user has blocked you and cannot receive friend requests from you.');
+            showInfoModal('Cannot send request', 'This user has blocked you or request already exists.');
             return;
         }
-        const { data: existing } = await supabase
-            .from('friendships')
-            .select('*')
-            .or(`and(user_id.eq.${currentUser.id},friend_id.eq.${targetUser.id}),and(user_id.eq.${targetUser.id},friend_id.eq.${currentUser.id})`)
-            .maybeSingle();
-        if (existing) {
+
+        const { data: validRequest } = await supabase
+            .rpc('validate_friend_request', {
+                sender_id: currentUser.id,
+                receiver_id: targetUser.id
+            });
+
+        if (!validRequest) {
             showInfoModal('Request exists', 'Friend request already exists or you are already friends.');
             return;
         }
+
         const { data: newRequest, error } = await supabase
             .from('friendships')
             .insert([{
@@ -5066,6 +5017,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }])
             .select()
             .single();
+
         if (error) {
             showInfoModal('Error', 'Failed to send friend request.');
             return;
@@ -5074,6 +5026,7 @@ document.addEventListener('DOMContentLoaded', () => {
         ui.friendUsernameInput.value = '';
         hideModal();
         showInfoModal('Request sent', 'Friend request sent successfully!');
+
         const targetUserId = targetUser.id;
         const notifyChannel = supabase.channel(`friend-requests-${targetUserId}`, {
             config: { broadcast: { self: false } }
@@ -5334,7 +5287,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     ui.loginForm.onsubmit = async (e) => {
         e.preventDefault();
-        const username = sanitizeInput(document.getElementById('login-username').value.trim());
+        const username = document.getElementById('login-username').value.trim();
         const password = document.getElementById('login-password').value;
 
         if (!username || !password) {
@@ -5350,8 +5303,6 @@ document.addEventListener('DOMContentLoaded', () => {
             showInfoModal('Account Locked', `Too many failed attempts. Try again in ${waitMinutes} minutes.`);
             return;
         }
-
-        if (!checkRateLimit(attemptKey, 'apiCalls')) return;
 
         try {
             const { data: profile, error: profileError } = await supabase
@@ -5397,62 +5348,241 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
+    const DOMPurify = {
+        sanitize: function (dirty) {
+            const div = document.createElement('div');
+            div.textContent = dirty;
+            return div.innerHTML;
+        }
+    };
+
+    const securityConfig = {
+        maxLoginAttempts: 5,
+        lockoutDuration: 15 * 60 * 1000,
+        minPasswordLength: 12,
+        maxMessageLength: 5000,
+        maxUsernameLength: 20,
+        maxFileSize: 25 * 1024 * 1024,
+        allowedImageTypes: ['image/jpeg', 'image/png', 'image/gif', 'image/webp'],
+        allowedFileTypes: [
+            'image/jpeg', 'image/png', 'image/gif', 'image/webp',
+            'application/pdf', 'text/plain',
+            'audio/mpeg', 'audio/wav',
+            'video/mp4', 'video/webm'
+        ],
+        rateLimit: {
+            messages: { max: 10, window: 10 },
+            friendRequests: { max: 5, window: 60 },
+            profileUpdates: { max: 3, window: 60 }
+        }
+    };
+
+    const securityHeaders = {
+        'Content-Security-Policy': "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self' wss: https:;",
+        'X-Content-Type-Options': 'nosniff',
+        'X-Frame-Options': 'DENY',
+        'X-XSS-Protection': '1; mode=block'
+    };
+
+    const sanitizeHTML = (str) => {
+        const temp = document.createElement('div');
+        temp.textContent = str;
+        return temp.innerHTML;
+    };
+
+    const validateMessageContent = (content) => {
+        if (!content || typeof content !== 'string') return false;
+        if (content.length > securityConfig.maxMessageLength) return false;
+
+        const scriptPattern = /<script[\s\S]*?<\/script>/gi;
+        if (scriptPattern.test(content)) return false;
+
+        const iframePattern = /<iframe[\s\S]*?<\/iframe>/gi;
+        if (iframePattern.test(content)) return false;
+
+        return true;
+    };
+
+    const rateLimitStore = new Map();
+
+    const advancedRateLimit = (userId, action, max, windowSeconds) => {
+        const key = `${userId}:${action}`;
+        const now = Date.now();
+        const windowMs = windowSeconds * 1000;
+
+        if (!rateLimitStore.has(key)) {
+            rateLimitStore.set(key, []);
+        }
+
+        const attempts = rateLimitStore.get(key);
+        const recentAttempts = attempts.filter(timestamp => now - timestamp < windowMs);
+
+        if (recentAttempts.length >= max) {
+            return false;
+        }
+
+        recentAttempts.push(now);
+        rateLimitStore.set(key, recentAttempts);
+
+        return true;
+    };
+
+    const loginAttempts = new Map();
+    const rateLimitCache = new Map();
+
+    const botDetection = {
+        sessionData: {},
+
+        initFormTracking(formId) {
+            const form = document.getElementById(formId);
+            if (!form) return;
+
+            this.sessionData[formId] = {
+                startTime: Date.now(),
+                keystrokes: 0,
+                mouseMovements: 0,
+                focused: false
+            };
+
+            const trackKeypress = () => this.sessionData[formId].keystrokes++;
+            const trackMouse = () => this.sessionData[formId].mouseMovements++;
+            const trackFocus = () => this.sessionData[formId].focused = true;
+
+            form.addEventListener('keypress', trackKeypress);
+            form.addEventListener('mousemove', trackMouse);
+            form.addEventListener('focus', trackFocus, true);
+
+            this.sessionData[formId].cleanup = () => {
+                form.removeEventListener('keypress', trackKeypress);
+                form.removeEventListener('mousemove', trackMouse);
+                form.removeEventListener('focus', trackFocus, true);
+            };
+        },
+
+        cleanup(formId) {
+            if (this.sessionData[formId]?.cleanup) {
+                this.sessionData[formId].cleanup();
+                delete this.sessionData[formId];
+            }
+        },
+
+        isLikelyBot(formId) {
+            const data = this.sessionData[formId];
+            if (!data) return false;
+
+            const timeSpent = Date.now() - data.startTime;
+
+            if (timeSpent < 2000) return true;
+            if (data.keystrokes === 0 && data.mouseMovements === 0) return true;
+            if (!data.focused) return true;
+
+            return false;
+        }
+    };
+
+    const validateInput = {
+        username(username) {
+            if (!username || typeof username !== 'string') return false;
+            if (username.length < 3 || username.length > securityConfig.maxUsernameLength) return false;
+            if (!/^[a-zA-Z0-9_-]+$/.test(username)) return false;
+
+            const forbidden = ['admin', 'root', 'system', 'null', 'undefined', 'moderator'];
+            if (forbidden.includes(username.toLowerCase())) return false;
+
+            return true;
+        },
+
+        password(password) {
+            if (!password || typeof password !== 'string') return false;
+            if (password.length < securityConfig.minPasswordLength) return false;
+
+            const hasUpper = /[A-Z]/.test(password);
+            const hasLower = /[a-z]/.test(password);
+            const hasNumber = /[0-9]/.test(password);
+            const hasSpecial = /[!@#$%^&*(),.?":{}|<>]/.test(password);
+
+            return hasUpper && hasLower && hasNumber && hasSpecial;
+        },
+
+        message(message) {
+            if (!message || typeof message !== 'string') return false;
+            if (message.length > securityConfig.maxMessageLength) return false;
+            return true;
+        },
+
+        file(file) {
+            if (!file || !(file instanceof File)) return false;
+            if (file.size > securityConfig.maxFileSize) return false;
+            if (!securityConfig.allowedFileTypes.includes(file.type)) return false;
+            return true;
+        }
+    };
+
+    const checkRateLimit = async (action) => {
+        if (!currentUser) return false;
+
+        const key = `${currentUser.id}-${action}`;
+        const now = Date.now();
+        const limit = securityConfig.rateLimit[action];
+
+        if (!limit) return true;
+
+        if (!rateLimitCache.has(key)) {
+            rateLimitCache.set(key, []);
+        }
+
+        const timestamps = rateLimitCache.get(key);
+        const windowMs = limit.window * 1000;
+        const recentTimestamps = timestamps.filter(t => now - t < windowMs);
+
+        if (recentTimestamps.length >= limit.max) {
+            return false;
+        }
+
+        recentTimestamps.push(now);
+        rateLimitCache.set(key, recentTimestamps);
+
+        return true;
+    };
+
+    const sanitizeMessage = (content) => {
+        if (!content) return '';
+
+        const sanitized = DOMPurify.sanitize(content);
+
+        return sanitized.substring(0, securityConfig.maxMessageLength);
+    };
+
     ui.signupForm.onsubmit = async (e) => {
         e.preventDefault();
 
-        if (!botDetection.validateFormSubmission('signup-form')) {
-            showInfoModal('Validation Failed', 'Please complete the form naturally.');
-            botDetection.cleanup('signup-form');
+        if (botDetection.isLikelyBot('signup-form')) {
+            showInfoModal('Error', 'Please try again.');
             return;
         }
 
-        const username = sanitizeInput(document.getElementById('signup-username').value.trim());
+        const username = document.getElementById('signup-username').value.trim();
         const password = document.getElementById('signup-password').value;
 
-        if (!validateUsername(username)) {
-            showInfoModal('Invalid username', 'Username must be 3-20 characters and contain only letters, numbers, underscores, and hyphens.');
+        if (!validateInput.username(username)) {
+            showInfoModal('Invalid username', 'Username must be 3-20 characters and contain only letters, numbers, underscores, and hyphens. Some usernames are reserved.');
             return;
         }
 
-        if (!validatePassword(password)) {
-            showInfoModal('Weak password', 'Password must be at least 8 characters with uppercase, lowercase, and numbers.');
-            return;
-        }
-
-        const signupKey = `signup_${sessionFingerprint}`;
-        if (!checkRateLimit(signupKey, 'apiCalls')) return;
-
-        if (!trackSuspiciousActivity(sessionFingerprint, 'signup')) {
-            showInfoModal('Too Many Attempts', 'Please wait a moment before trying again.');
+        if (!validateInput.password(password)) {
+            showInfoModal('Weak password', 'Password must be at least 12 characters and include uppercase, lowercase, number, and special character.');
             return;
         }
 
         try {
-            const { data: existing, error: checkError } = await supabase
-                .from('profiles')
-                .select('id')
-                .eq('username', username)
-                .maybeSingle();
-
-            if (checkError && checkError.code !== 'PGRST116') {
-                showInfoModal('Error', 'Could not verify username. Please try again.');
-                return;
-            }
-
-            if (existing) {
-                showInfoModal('Username taken', 'This username is already taken. Please choose another.');
-                return;
-            }
-
-            const email = `${username.toLowerCase().replace(/[^a-z0-9]/g, '')}@p2p.local`;
+            const email = `${username.toLowerCase().replace(/[^a-z0-9]/g, '')}${Date.now()}@p2p.local`;
 
             const { data: authData, error: signupError } = await supabase.auth.signUp({
                 email: email,
                 password: password,
                 options: {
                     data: {
-                        username: username,
-                        fingerprint: sessionFingerprint
+                        username: username
                     }
                 }
             });
@@ -5463,13 +5593,6 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             if (authData.user) {
-                await new Promise(resolve => setTimeout(resolve, 500));
-
-                const { error: updateError } = await supabase
-                    .from('profiles')
-                    .update({ username: username })
-                    .eq('id', authData.user.id);
-
                 botDetection.cleanup('signup-form');
                 location.reload();
             }

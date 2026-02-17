@@ -1,4 +1,4 @@
-![Palyra Banner](/public/images/banner.png)
+![Palyra Banner](/public/images/banner-rounded.png)
 
 # Palyra
 

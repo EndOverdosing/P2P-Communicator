@@ -40,6 +40,10 @@
             "destination": "/documentation/index.html"
         },
         {
+            "source": "/storage/:path*",
+            "destination": "/api/proxy-image"
+        },
+        {
             "source": "/((?!.*\\.).*)",
             "destination": "/index.html"
         }
