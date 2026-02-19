@@ -130,6 +130,12 @@
                 </div>
             </div>
             <div class="list-header">Conversations</div>
+            <div class="sidebar-actions" style="padding:0 1rem 0.5rem;">
+                <div class="search-input-wrapper" style="width:100%;">
+                    <i class="fa-solid fa-magnifying-glass"></i>
+                    <input type="text" id="search-input" placeholder="Search...">
+                </div>
+            </div>
             <nav id="content-list"></nav>
             <nav id="navbar-in-sidebar">
                 <button class="navbar-btn active" data-tab="personal">
@@ -372,8 +378,13 @@
                         <div id="server-members-list"></div>
                     </div>
                 </div>
-                <div class="server-actions" id="server-owner-actions" style="display: none;">
-                    <button class="danger-btn" id="delete-server-btn">Delete Server</button>
+                <div class="server-actions">
+                    <div id="server-owner-actions" style="display: none;">
+                        <button class="danger-btn" id="delete-server-btn">Delete Server</button>
+                    </div>
+                    <button class="danger-btn" id="leave-server-modal-btn"
+                        style="background:var(--tertiary-bg);color:var(--primary-text);margin-top:0.5rem;">Leave
+                        Server</button>
                 </div>
             </div>
         </div>

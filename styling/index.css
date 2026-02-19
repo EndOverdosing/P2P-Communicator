@@ -1,10 +1,10 @@
 :root {
     --primary-accent: #F1F1F1;
-    --primary-bg: #fefefe;
-    --secondary-bg: #f2f2f2;
+    --primary-bg: #ffffff;
+    --secondary-bg: #e6e6e6;
     --secondary-bg-rgb: 242, 242, 242, 0.5;
-    --tertiary-bg: #f1f1f1;
-    --tertiary-bg-rgb: 241, 241, 241;
+    --tertiary-bg: #878787;
+    --tertiary-bg-rgb: 135, 135, 135;
     --primary-text: #323232;
     --primary-text-rgba: 50, 50, 50, 0.7;
     --secondary-text: #7D7D7D;
@@ -503,7 +503,7 @@ button:disabled:hover {
     position: relative;
     margin-left: 20px;
     border-radius: 40px;
-    height: 90vh;
+    height: 95vh;
     justify-content: center;
     margin-top: auto;
     margin-bottom: auto;
@@ -619,7 +619,7 @@ button:disabled:hover {
 
 .search-input-wrapper input {
     width: 100%;
-    background-color: var(--tertiary-bg);
+    background-color: var(--primary-bg);
     border: none;
     border-radius: var(--input-border-radius-round);
     color: var(--primary-text);
@@ -1599,7 +1599,7 @@ button.secondary:hover {
 }
 
 select {
-    background: rgba(var(--tertiary-bg-rgb), 0.5);
+    background: rgba(var(--secondary-bg-rgb), 0.5);
     border: none;
     border-radius: var(--input-border-radius);
     color: var(--primary-text);
@@ -1957,7 +1957,7 @@ select option {
     padding: 1rem;
     border-radius: var(--button-border-radius);
     transition: var(--transition-fast);
-    background: rgba(var(--tertiary-bg-rgb), 0.5);
+    background: rgba(var(--secondary-bg-rgb), 0.5);
 }
 
 .toggle-switch input[type="checkbox"] {
@@ -3418,7 +3418,7 @@ body[data-font-size="large"] {
 
 #navbar-in-sidebar {
     display: flex;
-    background-color: var(--tertiary-bg);
+    background-color: var(--primary-bg);
     color: var(--primary-text);
     border-radius: var(--card-border-radius-round);
     padding: 8px 12px;
@@ -3514,6 +3514,20 @@ body[data-font-size="large"] {
     margin-top: 8px;
     padding: 8px;
     border-radius: var(--card-border-radius);
+    scrollbar-width: thin;
+    scrollbar-color: var(--secondary-bg) transparent;
+}
+
+#server-members-list::-webkit-scrollbar {
+    width: 8px;
+}
+
+#server-members-list::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+#server-members-list::-webkit-scrollbar-thumb {
+    background-color: var(--secondary-bg);
 }
 
 .member-item:hover {

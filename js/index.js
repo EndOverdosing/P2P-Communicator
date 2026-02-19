@@ -230,7 +230,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const clearAllBtn = document.createElement('button');
         clearAllBtn.textContent = 'Clear All';
-        clearAllBtn.style.cssText = 'width: 100%; margin-bottom: 0.75rem; background: var(--tertiary-bg); color: var(--secondary-text); border: none; border-radius: var(--button-border-radius); padding: 0.6rem 1rem; font-size: 0.85rem; cursor: pointer; transition: var(--transition-fast);';
+        clearAllBtn.style.cssText = 'width: 100%; margin-bottom: 0.75rem; background: var(--secondary-bg); color: var(--secondary-text); border: none; border-radius: var(--button-border-radius); padding: 0.6rem 1rem; font-size: 0.85rem; cursor: pointer; transition: var(--transition-fast);';
         clearAllBtn.onmouseenter = () => clearAllBtn.style.color = 'var(--primary-text)';
         clearAllBtn.onmouseleave = () => clearAllBtn.style.color = 'var(--secondary-text)';
         clearAllBtn.onclick = async () => {
@@ -1016,18 +1016,53 @@ document.addEventListener('DOMContentLoaded', () => {
             if (membership) {
                 openServerChat(server);
             } else {
-                if (server.is_private) {
-                    selectedServerForJoin = server;
-                    closeAllModals();
-                    ui.joinServerModal.classList.remove('hidden');
-                    ui.modalContainer.classList.remove('hidden');
-                } else {
-                    await addMemberToServer(server.id);
-                    openServerChat(server);
-                }
+                showServerJoinOverlay(server);
             }
-        } catch (error) {
-        }
+        } catch (error) { }
+    }
+
+    function showServerJoinOverlay(server) {
+        const existing = document.getElementById('server-join-overlay');
+        if (existing) existing.remove();
+
+        const overlay = document.createElement('div');
+        overlay.id = 'server-join-overlay';
+        overlay.style.cssText = `position:fixed;inset:0;background:rgba(0,0,0,0.7);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);z-index:10005;display:flex;align-items:center;justify-content:center;padding:1rem;`;
+
+        const card = document.createElement('div');
+        card.style.cssText = `background:var(--secondary-bg);border-radius:var(--card-border-radius);padding:2rem;max-width:400px;width:100%;text-align:center;`;
+
+        const initials = server.name.substring(0, 2).toUpperCase();
+        const memberCount = server.server_members?.[0]?.count || 0;
+
+        card.innerHTML = `
+        <div style="width:80px;height:80px;border-radius:50%;background:var(--primary-accent);display:flex;align-items:center;justify-content:center;font-size:1.75rem;font-weight:700;margin:0 auto 1rem;color:var(--primary-text);">${initials}</div>
+        <h2 style="margin-bottom:0.5rem;font-size:1.5rem;">${server.name}</h2>
+        <p style="color:var(--secondary-text);margin-bottom:0.25rem;">${server.is_private ? '🔒 Private Server' : '🌐 Public Server'}</p>
+        <p style="color:var(--secondary-text);font-size:0.875rem;margin-bottom:1.5rem;">${memberCount} member${memberCount !== 1 ? 's' : ''}</p>
+        <div style="display:flex;gap:0.75rem;">
+            <button id="join-overlay-cancel" style="flex:1;background:var(--tertiary-bg);color:var(--primary-text);">Cancel</button>
+            <button id="join-overlay-confirm" style="flex:1;background:var(--primary-accent);color:var(--primary-text);">${server.is_private ? 'Enter Password' : 'Join Server'}</button>
+        </div>
+    `;
+
+        overlay.appendChild(card);
+        document.body.appendChild(overlay);
+
+        overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
+        document.getElementById('join-overlay-cancel').onclick = () => overlay.remove();
+        document.getElementById('join-overlay-confirm').onclick = async () => {
+            overlay.remove();
+            if (server.is_private) {
+                selectedServerForJoin = server;
+                closeAllModals();
+                ui.joinServerModal.classList.remove('hidden');
+                ui.modalContainer.classList.remove('hidden');
+            } else {
+                await addMemberToServer(server.id);
+                openServerChat(server);
+            }
+        };
     }
 
     ui.joinServerForm?.addEventListener('submit', async (e) => {
@@ -1160,11 +1195,35 @@ document.addEventListener('DOMContentLoaded', () => {
     ui.serverInfoBtn?.addEventListener('click', async () => {
         if (!currentServer) return;
 
+        closeAllModals();
+        ui.serverInfoName.textContent = currentServer.name;
+        ui.serverType.textContent = currentServer.is_private ? 'Private' : 'Public';
+        ui.serverOwnerName.textContent = 'Loading...';
+        ui.serverInfoModal.classList.remove('hidden');
+        ui.modalContainer.classList.remove('hidden');
+        ui.serverOwnerActions.style.display = 'none';
+
+        ui.serverMembersList.innerHTML = '';
+        for (let i = 0; i < 4; i++) {
+            const skeleton = document.createElement('div');
+            skeleton.className = 'member-item';
+            skeleton.innerHTML = `
+                <div style="width:40px;height:40px;border-radius:50%;background:linear-gradient(90deg,var(--secondary-bg) 25%,var(--tertiary-bg) 50%,var(--secondary-bg) 75%);background-size:200% 100%;animation:shimmer 1.5s ease-in-out infinite;flex-shrink:0;"></div>
+                <div style="flex:1;display:flex;flex-direction:column;gap:0.4rem;">
+                    <div style="height:14px;width:60%;border-radius:4px;background:linear-gradient(90deg,var(--secondary-bg) 25%,var(--tertiary-bg) 50%,var(--secondary-bg) 75%);background-size:200% 100%;animation:shimmer 1.5s ease-in-out infinite;"></div>
+                    <div style="height:11px;width:35%;border-radius:4px;background:linear-gradient(90deg,var(--secondary-bg) 25%,var(--tertiary-bg) 50%,var(--secondary-bg) 75%);background-size:200% 100%;animation:shimmer 1.5s ease-in-out infinite;"></div>
+                </div>
+            `;
+            ui.serverMembersList.appendChild(skeleton);
+        }
+
         try {
             const { data: owner } = await supabaseClient
                 .from('profiles').select('username')
                 .eq('id', currentServer.owner_id)
                 .single();
+
+            ui.serverOwnerName.textContent = owner?.username || 'Unknown';
 
             const { data: memberIds, error: membersError } = await supabaseClient
                 .from('server_members')
@@ -1179,7 +1238,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     .from('profiles').select('username, avatar_url')
                     .eq('id', member.user_id)
                     .single();
-
                 members.push({
                     user_id: member.user_id,
                     username: userData?.username || 'Unknown',
@@ -1187,41 +1245,57 @@ document.addEventListener('DOMContentLoaded', () => {
                 });
             }
 
-
-            closeAllModals();
-            ui.serverInfoName.textContent = currentServer.name;
-            ui.serverOwnerName.textContent = owner?.username || 'Unknown';
-            ui.serverType.textContent = currentServer.is_private ? 'Private' : 'Public';
-
             ui.serverMembersList.innerHTML = '';
             members.forEach(member => {
                 const memberDiv = document.createElement('div');
                 memberDiv.className = 'member-item';
-
                 const username = member.username;
                 const isOwner = member.user_id === currentServer.owner_id;
                 const initials = username.substring(0, 2).toUpperCase();
 
-                memberDiv.innerHTML = `
-                <div class="member-avatar">${member.avatar_url ? `<img src="${member.avatar_url}" alt="${member.username}">` : initials}</div>
-                <div class="member-info">
-                    <span class="member-name">${username}</span>
-                    <span class="member-role">${isOwner ? 'Owner' : 'Member'}</span>
-                </div>
-                ${currentUser.id === currentServer.owner_id && !isOwner ? `
-                    <div class="member-actions">
-                        <button onclick="kickMember('${member.user_id}')">Kick</button>
-                    </div>
-                ` : ''}
-            `;
+                const avatarEl = document.createElement('div');
+                avatarEl.className = 'member-avatar';
+                avatarEl.style.cursor = 'pointer';
+                if (member.avatar_url) {
+                    avatarEl.innerHTML = `<img src="${member.avatar_url}" alt="${username}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">`;
+                } else {
+                    avatarEl.textContent = initials;
+                }
+                avatarEl.onclick = () => {
+                    hideModal();
+                    ui.profileUsername.textContent = username;
+                    ui.profileUsernameValue.textContent = username;
+                    ui.profileAvatar.textContent = initials;
+                    if (member.avatar_url) {
+                        ui.profileAvatar.innerHTML = `<img src="${member.avatar_url}" alt="${username}">`;
+                    }
+                    const isOnline = onlineUsers.has(member.user_id);
+                    ui.profileStatusDot.classList.toggle('online', isOnline);
+                    ui.profileStatusText.textContent = isOnline ? 'Online' : 'Offline';
+                    ui.profileJoinedDate.textContent = 'N/A';
+                    showModal(ui.friendProfileModal);
+                };
+
+                const infoEl = document.createElement('div');
+                infoEl.className = 'member-info';
+                infoEl.innerHTML = `<span class="member-name">${username}</span><span class="member-role">${isOwner ? 'Owner' : 'Member'}</span>`;
+
+                memberDiv.appendChild(avatarEl);
+                memberDiv.appendChild(infoEl);
+
+                if (currentUser.id === currentServer.owner_id && !isOwner) {
+                    const actionsEl = document.createElement('div');
+                    actionsEl.className = 'member-actions';
+                    actionsEl.innerHTML = `<button onclick="kickMember('${member.user_id}')">Kick</button>`;
+                    memberDiv.appendChild(actionsEl);
+                }
 
                 ui.serverMembersList.appendChild(memberDiv);
             });
 
             ui.serverOwnerActions.style.display = currentUser.id === currentServer.owner_id ? 'block' : 'none';
-            ui.serverInfoModal.classList.remove('hidden');
-            ui.modalContainer.classList.remove('hidden');
         } catch (error) {
+            ui.serverMembersList.innerHTML = '<p style="text-align:center;color:var(--secondary-text);padding:1rem;">Failed to load members</p>';
         }
     });
 
@@ -1260,6 +1334,36 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         );
     });
+
+    setTimeout(() => {
+        document.getElementById('leave-server-modal-btn')?.addEventListener('click', async () => {
+            if (!currentServer) return;
+            showConfirmation(
+                'Leave Server',
+                `Are you sure you want to leave ${currentServer.name}?`,
+                async () => {
+                    try {
+                        await supabaseClient
+                            .from('server_members')
+                            .delete()
+                            .eq('server_id', currentServer.id)
+                            .eq('user_id', currentUser.id);
+
+                        currentServer = null;
+                        currentChatType = 'friend';
+                        closeAllModals();
+                        ui.chatView.classList.add('hidden');
+                        ui.welcomeScreen.classList.remove('hidden');
+                        await loadServers();
+                        updateURLPath('global');
+                        showInfo('Success', 'Left server successfully');
+                    } catch (error) {
+                        showInfo('Error', error.message);
+                    }
+                }
+            );
+        });
+    }, 50);
 
     ui.searchInput?.addEventListener('input', () => {
         if (currentTab === 'global') {
@@ -1480,6 +1584,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 };
 
                 document.getElementById('leave-server-btn-dynamic').onclick = async () => {
+                    hideModal();
                     showConfirmation(
                         'Leave Server',
                         `Are you sure you want to leave ${currentServer.name}?`,
@@ -1491,8 +1596,12 @@ document.addEventListener('DOMContentLoaded', () => {
                                     .eq('server_id', currentServer.id)
                                     .eq('user_id', currentUser.id);
 
-                                hideModal();
-                                switchTab('global');
+                                currentServer = null;
+                                currentChatType = 'friend';
+                                ui.chatView.classList.add('hidden');
+                                ui.welcomeScreen.classList.remove('hidden');
+                                await loadServers();
+                                updateURLPath('global');
                                 showInfo('Success', 'Left server successfully');
                             } catch (error) {
                                 showInfo('Error', error.message);
@@ -1999,13 +2108,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const subscribeToFriendRequests = () => {
         if (!currentUser || !currentUser.id) return;
+        const broadcastChannel = supabaseClient.channel(`friend-requests-${currentUser.id}`);
 
-        const channel = supabaseClient.channel(`friend-requests-${currentUser.id}`);
-
-        channel
+        broadcastChannel
             .on('broadcast', { event: 'friend_request' }, async (payload) => {
                 await loadFriendRequests();
                 await updateConversationsList();
+                renderConversationsList();
                 showNotification('New friend request received!');
             })
             .on('broadcast', { event: 'friend_accepted' }, async (payload) => {
@@ -2024,7 +2133,43 @@ document.addEventListener('DOMContentLoaded', () => {
             .subscribe((status) => {
             });
 
-        subscriptions.push(channel);
+        subscriptions.push(broadcastChannel);
+
+        const dbChannel = supabase
+            .channel(`db-friendships-incoming-${currentUser.id}`)
+            .on('postgres_changes', {
+                event: 'INSERT',
+                schema: 'public',
+                table: 'friendships',
+                filter: `friend_id=eq.${currentUser.id}`
+            }, async (payload) => {
+                await loadFriendRequests();
+                await updateConversationsList();
+                renderConversationsList();
+            })
+            .on('postgres_changes', {
+                event: 'UPDATE',
+                schema: 'public',
+                table: 'friendships',
+                filter: `friend_id=eq.${currentUser.id}`
+            }, async (payload) => {
+                await loadFriends();
+                await updateConversationsList();
+            })
+            .on('postgres_changes', {
+                event: 'DELETE',
+                schema: 'public',
+                table: 'friendships',
+                filter: `friend_id=eq.${currentUser.id}`
+            }, async (payload) => {
+                await loadFriendRequests();
+                await loadFriends();
+                await updateConversationsList();
+            })
+            .subscribe((status) => {
+            });
+
+        subscriptions.push(dbChannel);
     };
 
     const subscribeToFriendships = () => {
@@ -2440,7 +2585,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     let remoteVideoStates = {};
 
-    const renderConversationsList = () => {
+    const renderConversationsList = async () => {
         if (isRenderingConversations) {
             return;
         }
@@ -2540,53 +2685,71 @@ document.addEventListener('DOMContentLoaded', () => {
                     });
                 }
             } else if (currentTab === 'global') {
-                const filteredServers = servers.filter(server => {
-                    return server.name.toLowerCase().includes(searchTerm);
-                });
+                const searchTerm = ui.searchInput?.value?.toLowerCase() || '';
+                const filteredServers = servers.filter(s => s.name.toLowerCase().includes(searchTerm));
 
-                if (filteredServers.length > 0) {
-                    filteredServers.forEach(server => {
-                        const initials = server.name.substring(0, 2).toUpperCase();
-                        const memberCount = server.server_members?.[0]?.count || 0;
+                const joinedServers = [];
+                const unjoinedServers = [];
 
-                        const serverDiv = document.createElement('div');
-                        serverDiv.className = 'server-item';
-                        serverDiv.dataset.serverId = server.id;
+                for (const server of filteredServers) {
+                    const { data: membership } = await supabaseClient
+                        .from('server_members')
+                        .select('user_id')
+                        .eq('server_id', server.id)
+                        .eq('user_id', currentUser.id)
+                        .maybeSingle();
+                    if (membership) {
+                        joinedServers.push(server);
+                    } else {
+                        unjoinedServers.push(server);
+                    }
+                }
 
-                        serverDiv.innerHTML = `
-    <div class="avatar-wrapper">
-        <div class="avatar server-avatar" style="background: var(--primary-accent);">${initials}</div>
-    </div>
-    <div class="friend-info">
-        <div class="server-name">
-            ${server.name}
-            ${server.is_private ? '<i class="fa-solid fa-lock server-lock-icon"></i>' : ''}
-        </div>
-        <div class="server-meta">
-            <span>Members:</span> <span>${memberCount}</span>
-        </div>
-    </div>
-`;
+                const renderServerItem = (server) => {
+                    const initials = server.name.substring(0, 2).toUpperCase();
+                    const memberCount = server.server_members?.[0]?.count || 0;
+                    const serverDiv = document.createElement('div');
+                    serverDiv.className = 'server-item';
+                    serverDiv.dataset.serverId = server.id;
+                    serverDiv.innerHTML = `
+            <div class="avatar-wrapper">
+                <div class="avatar server-avatar" style="background:var(--primary-accent);">${initials}</div>
+            </div>
+            <div class="friend-info">
+                <div class="server-name">${server.name}${server.is_private ? '<i class="fa-solid fa-lock server-lock-icon"></i>' : ''}</div>
+                <div class="server-meta"><span>Members:</span> <span>${memberCount}</span></div>
+            </div>
+        `;
+                    serverDiv.addEventListener('click', () => joinServer(server));
+                    return serverDiv;
+                };
 
-                        serverDiv.addEventListener('click', () => {
-                            joinServer(server);
-                        });
+                if (joinedServers.length > 0) {
+                    const header = document.createElement('div');
+                    header.className = 'list-header';
+                    header.textContent = 'Joined Servers';
+                    ui.contentList.appendChild(header);
+                    joinedServers.forEach(s => ui.contentList.appendChild(renderServerItem(s)));
+                }
 
-                        ui.contentList.appendChild(serverDiv);
-                    });
-                } else {
+                if (unjoinedServers.length > 0) {
+                    const header = document.createElement('div');
+                    header.className = 'list-header';
+                    header.textContent = 'Discover Servers';
+                    ui.contentList.appendChild(header);
+                    unjoinedServers.forEach(s => ui.contentList.appendChild(renderServerItem(s)));
+                }
+
+                if (filteredServers.length === 0) {
                     const emptyState = document.createElement('div');
                     emptyState.className = 'empty-state';
                     emptyState.innerHTML = `
-                    <i class="fa-solid fa-globe"></i>
-                    <h3>No servers found</h3>
-                    <p>Try a different search term or create a new server</p>
-                    <button id="create-server-empty" class="btn btn-primary">
-                        <i class="fa-solid fa-plus"></i> Create Server
-                    </button>
-                `;
+            <i class="fa-solid fa-globe"></i>
+            <h3>No servers found</h3>
+            <p>Try a different search term or create a new server</p>
+            <button id="create-server-empty" class="btn btn-primary"><i class="fa-solid fa-plus"></i> Create Server</button>
+        `;
                     ui.contentList.appendChild(emptyState);
-
                     document.getElementById('create-server-empty')?.addEventListener('click', () => {
                         hideModal();
                         showModal(ui.createServerModal);
@@ -2715,9 +2878,8 @@ document.addEventListener('DOMContentLoaded', () => {
         await notifyChannel.send({
             type: 'broadcast',
             event: 'friend_accepted',
-            payload: { friendId: currentUser.id }
+            payload: { fromUserId: currentUser.id }
         });
-
         supabaseClient.removeChannel(notifyChannel);
     };
 
@@ -2982,6 +3144,11 @@ document.addEventListener('DOMContentLoaded', () => {
         avatarWrapper.className = 'message-avatar-wrapper';
         avatarWrapper.appendChild(avatarDiv);
         avatarWrapper.appendChild(usernameDiv);
+
+        avatarWrapper.style.cursor = 'pointer';
+        avatarWrapper.onclick = () => {
+            showProfileFromUserId(msg.user_id);
+        };
 
         const contentWrapper = document.createElement('div');
         contentWrapper.style.cssText = isMobile ? 'position: relative;' : '';
@@ -4126,6 +4293,96 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     };
 
+    const showProfileFromUserId = async (userId) => {
+        let profileData = null;
+
+        if (userId === currentUser.id) {
+            profileData = currentUser;
+        } else if (friends[userId]) {
+            profileData = friends[userId];
+        } else {
+            const { data } = await supabase
+                .from('profiles')
+                .select('id, username, avatar_url, created_at')
+                .eq('id', userId)
+                .single();
+            profileData = data;
+        }
+
+        if (!profileData) return;
+
+        ui.profileUsername.textContent = profileData.username;
+        ui.profileUsernameValue.textContent = profileData.username;
+        ui.profileAvatar.textContent = profileData.username[0].toUpperCase();
+
+        if (profileData.avatar_url) {
+            ui.profileAvatar.innerHTML = `<img src="${profileData.avatar_url}" alt="${profileData.username}">`;
+        }
+
+        const isOnline = onlineUsers.has(profileData.id);
+        ui.profileStatusDot.classList.toggle('online', isOnline);
+        ui.profileStatusText.textContent = isOnline ? 'Online' : 'Offline';
+        ui.profileJoinedDate.textContent = profileData.created_at
+            ? new Date(profileData.created_at).toLocaleDateString()
+            : 'N/A';
+
+        const isFriend = !!friends[profileData.id];
+        const isSelf = profileData.id === currentUser.id;
+
+        let addFriendBtn = document.getElementById('profile-add-friend-btn');
+        if (!addFriendBtn) {
+            addFriendBtn = document.createElement('button');
+            addFriendBtn.id = 'profile-add-friend-btn';
+            addFriendBtn.style.cssText = 'margin-top:1rem;width:100%;';
+            ui.friendProfileModal.querySelector('.profile-info').after(addFriendBtn);
+        }
+
+        if (isSelf || isFriend) {
+            addFriendBtn.style.display = 'none';
+        } else {
+            addFriendBtn.style.display = 'block';
+            addFriendBtn.textContent = 'Add Friend';
+            addFriendBtn.onclick = async () => {
+                const { data: existing } = await supabase
+                    .from('friendships')
+                    .select('id')
+                    .or(`and(user_id.eq.${currentUser.id},friend_id.eq.${profileData.id}),and(user_id.eq.${profileData.id},friend_id.eq.${currentUser.id})`)
+                    .maybeSingle();
+
+                if (existing) {
+                    showInfo('Already sent', 'Friend request already exists or you are already friends.');
+                    return;
+                }
+
+                const { error } = await supabase
+                    .from('friendships')
+                    .insert([{ user_id: currentUser.id, friend_id: profileData.id, status: 'pending' }]);
+
+                if (error) {
+                    showInfo('Error', 'Failed to send friend request.');
+                    return;
+                }
+
+                addFriendBtn.textContent = 'Request Sent';
+                addFriendBtn.disabled = true;
+
+                const notifyChannel = supabaseClient.channel(`friend-requests-${profileData.id}`, {
+                    config: { broadcast: { self: false } }
+                });
+                await new Promise(resolve => notifyChannel.subscribe(s => s === 'SUBSCRIBED' && resolve()));
+                await notifyChannel.send({
+                    type: 'broadcast',
+                    event: 'friend_request',
+                    payload: { fromUserId: currentUser.id, fromUsername: currentUser.username }
+                });
+                supabaseClient.removeChannel(notifyChannel);
+            };
+        }
+
+        closeAllModals();
+        showModal(ui.friendProfileModal);
+    };
+
     window.editServerMessage = (messageId, content) => {
         const msgElement = document.querySelector(`[data-message-id="${messageId}"]`);
         if (!msgElement) return;
@@ -4204,10 +4461,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 return;
             }
 
-editContainer.remove();
-contentElement.style.display = '';
-contentElement.textContent = '';
-const textNode = document.createTextNode(newContent);
+            editContainer.remove();
+            contentElement.style.display = '';
+            contentElement.textContent = '';
+            const textNode = document.createTextNode(newContent);
             const editedSpan = document.createElement('span');
             editedSpan.className = 'message-edited';
             editedSpan.style.cssText = 'font-size: 0.75rem; color: var(--secondary-text); margin-left: 0.5rem;';
@@ -4408,35 +4665,35 @@ const textNode = document.createTextNode(newContent);
         editContainer.appendChild(textarea);
         editContainer.appendChild(buttonContainer);
 
-contentElement.style.display = 'none';
-contentWrapper.appendChild(editContainer);
+        contentElement.style.display = 'none';
+        contentWrapper.appendChild(editContainer);
 
         textarea.focus();
-textarea.setSelectionRange(textarea.value.length, textarea.value.length);
+        textarea.setSelectionRange(textarea.value.length, textarea.value.length);
 
-const cancelEdit = () => {
-    editContainer.remove();
-    contentElement.style.display = '';
-    const urlRegex = /(https?:\/\/[^\s<>"{}|\\^`\[\]]+)/g;
-    const parts = originalText.split(urlRegex);
-    parts.forEach((part) => {
-        if (part.match(urlRegex)) {
-            const link = document.createElement('a');
-            link.href = part;
-            link.target = '_blank';
-            link.rel = 'noopener noreferrer';
-            link.className = 'message-link';
-            link.textContent = part;
-            contentElement.appendChild(link);
-        } else if (part) {
-            contentElement.appendChild(document.createTextNode(part));
-        }
-    });
-    const existingEdited = msgElement.querySelector('.message-edited');
-    if (existingEdited) contentElement.appendChild(existingEdited);
-};
+        const cancelEdit = () => {
+            editContainer.remove();
+            contentElement.style.display = '';
+            const urlRegex = /(https?:\/\/[^\s<>"{}|\\^`\[\]]+)/g;
+            const parts = originalText.split(urlRegex);
+            parts.forEach((part) => {
+                if (part.match(urlRegex)) {
+                    const link = document.createElement('a');
+                    link.href = part;
+                    link.target = '_blank';
+                    link.rel = 'noopener noreferrer';
+                    link.className = 'message-link';
+                    link.textContent = part;
+                    contentElement.appendChild(link);
+                } else if (part) {
+                    contentElement.appendChild(document.createTextNode(part));
+                }
+            });
+            const existingEdited = msgElement.querySelector('.message-edited');
+            if (existingEdited) contentElement.appendChild(existingEdited);
+        };
 
-const saveEdit = async () => {
+        const saveEdit = async () => {
             const newContent = textarea.value.trim();
             if (!newContent) {
                 cancelEdit();
@@ -4641,7 +4898,6 @@ const saveEdit = async () => {
     };
 
     const toggleReaction = async (messageId, emoji) => {
-        // Get current reactions from cache (not DB - avoids RLS SELECT issues)
         const cachedReactions = messageReactionsCache.get(messageId) || {};
         const reactions = JSON.parse(JSON.stringify(cachedReactions));
         const usersForEmoji = Array.isArray(reactions[emoji]) ? [...reactions[emoji]] : [];
@@ -4657,25 +4913,21 @@ const saveEdit = async () => {
         } else {
             reactions[emoji] = [...usersForEmoji, currentUser.id];
         }
-        // Update cache immediately
+
         messageReactionsCache.set(messageId, reactions);
 
-        // Update UI optimistically
         renderReactions(messageId, reactions);
 
-        // Write to DB
         const { error: updateError } = await supabase
             .from('messages')
             .update({ reactions })
             .eq('id', messageId);
 
         if (updateError) {
-            // Rollback cache and UI
             messageReactionsCache.set(messageId, cachedReactions);
             renderReactions(messageId, cachedReactions);
             return;
         }
-        // Determine other user from cache or fetch minimally
         let otherUserId = null;
         const messageEl = document.querySelector(`[data-message-id="${messageId}"]`);
         if (messageEl) {
@@ -4685,7 +4937,6 @@ const saveEdit = async () => {
         }
 
         if (!otherUserId) {
-            // Only fetch sender/receiver, not reactions
             const { data: msgMeta } = await supabase
                 .from('messages')
                 .select('sender_id, receiver_id')
@@ -5337,7 +5588,7 @@ const saveEdit = async () => {
             return;
         }
 
-       const { data: existingFriendship } = await supabase
+        const { data: existingFriendship } = await supabase
             .from('friendships')
             .select('id')
             .or(`and(user_id.eq.${currentUser.id},friend_id.eq.${targetUser.id}),and(user_id.eq.${targetUser.id},friend_id.eq.${currentUser.id})`)
@@ -5371,17 +5622,23 @@ const saveEdit = async () => {
             config: { broadcast: { self: false } }
         });
 
-        await new Promise((resolve) => {
+        await new Promise((resolve, reject) => {
+            const timeout = setTimeout(() => {
+                reject(new Error('timeout'));
+            }, 5000);
+
             notifyChannel.subscribe((status) => {
-                if (status === 'SUBSCRIBED') resolve();
+                if (status === 'SUBSCRIBED') {
+                    clearTimeout(timeout);
+                    resolve();
+                } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+                    clearTimeout(timeout);
+                    reject(new Error(status));
+                }
             });
         });
 
-        await notifyChannel.send({
-            type: 'broadcast',
-            event: 'friend_request',
-            payload: { fromUserId: currentUser.id }
-        });
+        supabaseClient.removeChannel(notifyChannel);
     };
 
     const showModal = (modal) => {
@@ -5594,11 +5851,6 @@ const saveEdit = async () => {
                             blockedUser: blockedUserId,
                             timestamp: Date.now()
                         };
-                        const sendResult = await blockChannel.send({
-                            type: 'broadcast',
-                            event: 'user_blocked',
-                            payload: broadcastPayload
-                        });
                         setTimeout(() => {
                             supabaseClient.removeChannel(blockChannel);
                         }, 2000);
