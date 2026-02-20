@@ -313,7 +313,7 @@ body {
 
 @media (max-width: 909px) {
     #chat-header {
-        top: calc(10px + env(safe-area-inset-top, 0px));
+        padding-top: env(safe-area-inset-top, 0px);
     }
 
     #messages-container {
