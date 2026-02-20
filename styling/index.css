@@ -3984,11 +3984,6 @@ body[data-font-size="large"] {
         width: 100%;
     }
 
-#message-form {
-    width: 100% !important;
-    bottom: env(safe-area-inset-bottom) !important;
-}
-
     .file-attachment-preview {
         width: 100% !important;
     }
