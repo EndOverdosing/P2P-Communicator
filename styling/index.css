@@ -121,22 +121,44 @@ body {
 }
 
 @media (display-mode: standalone) {
+    body {
+        height: 100dvh;
+    }
+
+    #main-app {
+        height: 100dvh;
+    }
+
+    #sidebar {
+        height: calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+    }
+
+    #chat-container {
+        height: 100dvh;
+    }
+
     #message-form {
-        bottom: 0 !important;
-        padding-bottom: calc(0.5rem + env(safe-area-inset-bottom)) !important;
+        bottom: env(safe-area-inset-bottom) !important;
+        width: 100% !important;
+        padding-bottom: 0.5rem !important;
+    }
+
+    .bottom-overlay {
+        bottom: calc(env(safe-area-inset-bottom) + 70px) !important;
     }
 
     #navbar-in-sidebar {
         bottom: 0 !important;
-        padding-bottom: calc(4px + env(safe-area-inset-bottom)) !important;
+        padding-bottom: calc(env(safe-area-inset-bottom) + 4px) !important;
     }
 
-    .bottom-overlay {
-        bottom: calc(60px + env(safe-area-inset-bottom)) !important;
+    #sidebar {
+        padding-bottom: calc(60px + env(safe-area-inset-bottom)) !important;
     }
 
     .file-attachment-preview {
-        margin-bottom: 80px !important;
+        margin-bottom: 70px !important;
+        width: 100% !important;
     }
 }
 
