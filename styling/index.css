@@ -3716,12 +3716,6 @@ body[data-font-size="large"] {
     display: block;
 }
 
-@media (min-width: 769px) {
-    #main-app {
-        padding-bottom: 0;
-    }
-}
-
 @media (max-width: 909px) {
     #settings-modal {
         border-radius: var(--card-border-radius) var(--card-border-radius) 0 0;
@@ -4019,12 +4013,6 @@ body[data-font-size="large"] {
 
     #share-screen-btn {
         display: none !important;
-    }
-}
-
-@media (min-width: 769px) {
-    #main-app {
-        padding-bottom: 0;
     }
 }
 
