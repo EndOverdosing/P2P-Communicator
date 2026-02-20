@@ -4655,7 +4655,7 @@ body[data-font-size="large"] {
 
 .bottom-overlay {
     position: fixed;
-    bottom: 20px;
+    bottom: calc(80px + env(safe-area-inset-bottom));
     left: 50%;
     transform: translateX(-50%);
     font-size: 1rem;
@@ -4673,7 +4673,6 @@ body[data-font-size="large"] {
     text-decoration: none;
     z-index: 99999999999;
     transition: var(--transition-fast);
-    margin-bottom: 60px;
     width: 300px;
     opacity: 0.2;
 }
