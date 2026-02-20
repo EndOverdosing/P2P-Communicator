@@ -120,64 +120,6 @@ body {
   padding-top: 1rem;
 }
 
-@media (display-mode: standalone) {
-    body, #main-app, #chat-container {
-        height: 100dvh;
-    }
-
-    #message-form {
-        bottom: none !important;
-        width: 100% !important;
-    }
-
-    .bottom-overlay {
-        display: none !important;
-    }
-
-    #navbar-in-sidebar {
-        bottom: none !important;
-    }
-
-    #sidebar {
-        bottom: none !important;
-        height: 100dvh !important;
-    }
-
-    .file-attachment-preview {
-        width: 100% !important;
-        margin-bottom: 0px !important;
-    }
-}
-
-@media (display-mode: standalone) and (max-width: 909px) {
-    #sidebar {
-        padding-bottom: none !important;
-    }
-
-    #message-form {
-        bottom: 0 !important;
-    }
-}
-
-@media (max-width: 909px) {
-  #sidebar {
-    height: 100%;
-    padding-top: env(safe-area-inset-top);
-  }
-
-  .sidebar-header {
-    padding-top: calc(0.5rem + env(safe-area-inset-top));
-  }
-
-  #navbar-in-sidebar {
-    padding-top: 4px;
-  }
-
-  #chat-container {
-    height: 100%;
-  }
-}
-
 .hidden {
     display: none !important;
 }
