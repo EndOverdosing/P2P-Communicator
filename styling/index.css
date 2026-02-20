@@ -2557,6 +2557,10 @@ select option {
         flex: 1 1 45%;
         min-height: 350px;
     }
+    
+    #message-form {
+        width: 100%;
+    }
 }
 
 .main-controls-bar {
