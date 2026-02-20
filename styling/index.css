@@ -87,6 +87,66 @@ body {
     scroll-behavior: auto !important;
 }
 
+html {
+  padding-top: env(safe-area-inset-top);
+  padding-bottom: env(safe-area-inset-bottom);
+  background: var(--primary-bg);
+}
+
+body {
+  overscroll-behavior-y: none;
+  position: fixed;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+#main-app {
+  height: 100%;
+  overflow: hidden;
+}
+
+#auth-container {
+  min-height: 100%;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+#sidebar {
+  height: calc(95vh - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+}
+
+.sidebar-header {
+  padding-top: calc(1rem + env(safe-area-inset-top));
+}
+
+#navbar-in-sidebar {
+  padding-bottom: calc(8px + env(safe-area-inset-bottom));
+}
+
+#bottom-navbar {
+  padding-bottom: calc(8px + env(safe-area-inset-bottom));
+}
+
+@media (max-width: 909px) {
+  #navbar-in-sidebar {
+    padding-bottom: env(safe-area-inset-bottom);
+    bottom: 0;
+  }
+
+  body {
+    position: fixed;
+    overflow: hidden;
+  }
+
+  #chat-container,
+  #sidebar {
+    height: 100%;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+}
+
 .hidden {
     display: none !important;
 }
