@@ -313,15 +313,16 @@ body {
 
 @media (max-width: 909px) {
     #chat-header {
-        padding-top: env(safe-area-inset-top, 0px);
+        top: calc(10px + env(safe-area-inset-top, 0px));
     }
 
     #messages-container {
         padding-top: calc(150px + env(safe-area-inset-top, 0px));
     }
 
-    #message-form {
-        bottom: env(safe-area-inset-bottom, 0px);
+   #message-form {
+        margin-bottom: 0;
+        padding-bottom: env(safe-area-inset-bottom, 0px);
     }
 }
 
@@ -1473,7 +1474,6 @@ button.secondary:hover {
     left: 0;
     right: 0;
     z-index: 10;
-
     width: 50%;
     margin-left: auto;
     margin-right: auto;
