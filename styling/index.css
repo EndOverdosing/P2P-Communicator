@@ -98,7 +98,6 @@ body {
   overflow: hidden;
   overscroll-behavior: none;
   padding-top: env(safe-area-inset-top);
-  padding-bottom: env(safe-area-inset-bottom);
 }
 
 #main-app {
@@ -4027,10 +4026,10 @@ body[data-font-size="large"] {
         width: 100%;
     }
 
-    #message-form {
+#message-form {
     width: 100% !important;
-    bottom: 0 !important;
-    padding-bottom: calc(1rem + env(safe-area-inset-bottom));
+    bottom: env(safe-area-inset-bottom) !important;
+    padding-bottom: 1rem !important;
 }
 
     .file-attachment-preview {
