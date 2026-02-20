@@ -319,12 +319,13 @@ body {
     }
 
    #message-form {
-        margin-bottom: 0;
-        padding-bottom: env(safe-area-inset-bottom, 0px);
-    }
-    
-    .bottom-overlay {
         bottom: calc(env(safe-area-inset-bottom, 0px) + 70px);
+        margin-bottom: 0;
+        padding-bottom: 0;
+    }
+
+    .bottom-overlay {
+        bottom: calc(env(safe-area-inset-bottom, 0px) + 140px);
         margin-bottom: 0;
     }
 }
