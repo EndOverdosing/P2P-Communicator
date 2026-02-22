@@ -2737,7 +2737,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 <div style="font-weight: 600; font-size: 0.9rem; color: var(--primary-text);">${featuredServer.name}</div>
                 <div style="font-size: 0.75rem; color: var(--secondary-text);">${memberCount} member${memberCount !== 1 ? 's' : ''}</div>
             </div>
-            <button style="padding: 6px 12px; border-radius: 6px; font-size: 0.75rem; font-weight: 500; background: ${isJoined ? 'var(--tertiary-bg)' : 'var(--primary-text)'}; color: ${isJoined ? 'var(--secondary-text)' : 'var(--primary-bg)'}; border: none; cursor: pointer;">${isJoined ? 'Open' : 'Join'}</button>
+            <button style="padding: 6px 12px; border-radius: 6px; font-size: 0.75rem; font-weight: 500; background: ${isJoined ? 'var(--tertiary-bg)' : 'var(--primary-text)'}; color: ${isJoined ? 'var(--primary-text)' : 'var(--primary-bg)'}; border: none; cursor: pointer;">${isJoined ? 'Open' : 'Join'}</button>
         </div>
     `;
                     featuredDiv.onmouseenter = () => featuredDiv.style.opacity = '0.85';
