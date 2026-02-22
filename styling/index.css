@@ -297,20 +297,6 @@ body {
     font-size: 0.7rem;
 }
 
-#sidebar {
-    padding-top: env(safe-area-inset-top, 0px);
-}
-
-@media (max-width: 909px) {
-    #sidebar {
-        padding-top: env(safe-area-inset-top, 0px);
-    }
-
-    #chat-header {
-        top: calc(10px + env(safe-area-inset-top, 0px));
-    }
-}
-
 @media (max-width: 768px) {
     .auth-footer {
         margin-top: 2rem;
@@ -789,7 +775,7 @@ button.secondary:hover {
     content: '';
     position: fixed;
     inset: 0 0 auto 0;
-    height: calc(120px + env(safe-area-inset-top, 0px));
+    height: 120px;
     background: transparent;
     backdrop-filter: blur(48px) saturate(1.15);
     -webkit-backdrop-filter: blur(48px) saturate(1.15);
@@ -871,7 +857,6 @@ button.secondary:hover {
     bottom: 0;
     left: 0;
     right: 0;
-    height: env(safe-area-inset-bottom, 0px);
     background-color: var(--primary-bg);
     z-index: 9;
 }
@@ -1000,7 +985,6 @@ button.secondary:hover {
     padding-bottom: 100px;
     position: relative;
     z-index: 2;
-    padding-bottom: calc(100px + env(safe-area-inset-bottom, 0px));
 }
 
 #messages-container::-webkit-scrollbar {
@@ -1467,14 +1451,13 @@ button.secondary:hover {
     background: transparent;
     flex-shrink: 0;
     position: absolute;
-    bottom: env(safe-area-inset-bottom, 0px);
+    bottom: 0;
     left: 0;
     right: 0;
     z-index: 10;
     width: 50%;
     margin-left: auto;
     margin-right: auto;
-    margin-bottom: 10px;
 }
 
 #chat-container::before {
@@ -1483,7 +1466,6 @@ button.secondary:hover {
     bottom: 0;
     left: 0;
     right: 0;
-    height: env(safe-area-inset-bottom, 0px);
     background-color: var(--primary-bg);
     z-index: 9;
 }
@@ -1511,6 +1493,7 @@ button.secondary:hover {
     scrollbar-width: none;
     transition: var(--transition-fast);
     font-family: var(--font-family);
+    width: 50vw;
 }
 
 #message-input::-webkit-scrollbar {
@@ -3661,6 +3644,10 @@ body[data-font-size="large"] {
         cursor: grabbing;
     }
 
+    #message-input {
+        width: 75vw;
+    }
+
     #edit-modal-container {
         align-items: flex-end;
         justify-content: stretch;
@@ -3990,7 +3977,6 @@ body[data-font-size="large"] {
 
 .file-attachment-preview {
     position: fixed;
-    bottom: calc(70px + env(safe-area-inset-bottom, 0px));
     left: 50%;
     transform: translateX(-50%);
     width: 50%;
