@@ -100,6 +100,11 @@ html {
     text-size-adjust: 100%;
     font-size: var(--base-font-size) !important;
     overscroll-behavior: none;
+    overscroll-behavior: none;
+    overflow: hidden;
+    position: fixed;
+    width: 100%;
+    height: 100%;
 }
 
 strong {
@@ -118,6 +123,11 @@ body {
     top: 0 !important;
     background-color: var(--primary-bg);
     transition: background-color 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+    overscroll-behavior: none;
+    overflow: hidden;
+    position: fixed;
+    width: 100%;
+    height: 100%;
 }
 
 #auth-container {
@@ -492,6 +502,11 @@ button:disabled:hover {
     display: flex;
     height: 100vh;
     width: 100%;
+    overflow: hidden;
+    position: fixed;
+    width: 100%;
+    top: 0;
+    left: 0;
 }
 
 #sidebar {
@@ -985,6 +1000,8 @@ button.secondary:hover {
     padding-bottom: 100px;
     position: relative;
     z-index: 2;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
 }
 
 #messages-container::-webkit-scrollbar {
@@ -1458,6 +1475,9 @@ button.secondary:hover {
     width: 50%;
     margin-left: auto;
     margin-right: auto;
+    position: fixed;
+    bottom: env(safe-area-inset-bottom, 0);
+    padding-bottom: calc(1rem + env(safe-area-inset-bottom, 0px));
 }
 
 #chat-container::before {
