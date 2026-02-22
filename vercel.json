@@ -44,6 +44,10 @@
             "destination": "/api/proxy-image"
         },
         {
+            "source": "/profile/:handle",
+            "destination": "/index.html"
+        },
+        {
             "source": "/((?!.*\\.).*)",
             "destination": "/index.html"
         }

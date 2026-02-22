@@ -14,6 +14,15 @@ document.addEventListener('DOMContentLoaded', () => {
     const supabase = supabaseClient;
 
     const ui = {
+        editProfileContainer: document.getElementById('edit-profile-container'),
+        editProfileModal: document.getElementById('edit-profile-modal'),
+        editProfileContent: document.getElementById('edit-profile-content'),
+        closeEditProfileBtn: document.getElementById('close-edit-profile-btn'),
+        editBannerPreview: document.getElementById('edit-banner-preview'),
+        editBannerUpload: document.getElementById('edit-banner-upload'),
+        editBioInput: document.getElementById('edit-bio-input'),
+        editBioCounter: document.getElementById('edit-bio-counter'),
+        saveEditProfileBtn: document.getElementById('save-edit-profile-btn'),
         settingsModal: document.getElementById('settings-modal'),
         authContainer: document.getElementById('auth-container'),
         mainApp: document.getElementById('main-app'),
@@ -88,15 +97,6 @@ document.addEventListener('DOMContentLoaded', () => {
         muteConversationBtn: document.getElementById('mute-conversation-btn'),
         blockUserBtn: document.getElementById('block-user-btn'),
         unfriendBtn: document.getElementById('unfriend-btn'),
-        friendProfileModal: document.getElementById('friend-profile-modal'),
-        profileAvatar: document.getElementById('profile-avatar'),
-        profileUsername: document.getElementById('profile-username'),
-        profileStatusDot: document.getElementById('profile-status-dot'),
-        profileStatusText: document.getElementById('profile-status-text'),
-        profileUsernameValue: document.getElementById('profile-username-value'),
-        profileJoinedDate: document.getElementById('profile-joined-date'),
-        messageUserBtn: document.getElementById('message-user-btn'),
-        callUserBtn: document.getElementById('call-user-btn'),
         changeUsernameModal: document.getElementById('change-username-modal'),
         changeUsernameForm: document.getElementById('change-username-form'),
         newUsernameInput: document.getElementById('new-username-input'),
@@ -106,6 +106,7 @@ document.addEventListener('DOMContentLoaded', () => {
         editMessageForm: document.getElementById('edit-message-form'),
         editMessageInput: document.getElementById('edit-message-input'),
         fileInput: document.getElementById('file-input'),
+        profileAvatarUpload: document.getElementById('profile-avatar-upload'),
         friendRequestsModal: document.getElementById('friend-requests-modal'),
         requestsList: document.getElementById('requests-list'),
         closeChatPaneBtn: document.getElementById('close-chat-pane-btn'),
@@ -814,7 +815,6 @@ document.addEventListener('DOMContentLoaded', () => {
         ui.confirmationModal?.classList.add('hidden');
         ui.infoModal?.classList.add('hidden');
         ui.chatOptionsModal?.classList.add('hidden');
-        ui.friendProfileModal?.classList.add('hidden');
         ui.changeUsernameModal?.classList.add('hidden');
         ui.editMessageModal?.classList.add('hidden');
         ui.createServerModal?.classList.add('hidden');
@@ -872,10 +872,6 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
 
-        document.querySelectorAll('.navbar-btn').forEach(btn => {
-            btn.classList.toggle('active', btn.dataset.tab === tab);
-        });
-
         document.querySelectorAll('.personal-only').forEach(el => {
             el.classList.toggle('hidden', tab !== 'personal');
         });
@@ -901,6 +897,43 @@ document.addEventListener('DOMContentLoaded', () => {
 
     document.querySelectorAll('.navbar-btn').forEach(btn => {
         btn.addEventListener('click', async () => {
+            document.querySelectorAll('.navbar-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+
+            if (btn.dataset.tab === 'profile') {
+                showProfilePage();
+                return;
+            }
+            const profilePage = document.getElementById('profile-page');
+            if (profilePage) {
+                profilePage.remove();
+                const sidebarHeader = ui.sidebar.querySelector('.sidebar-header');
+                const sidebarActions = document.querySelector('.sidebar-header-actions');
+                if (sidebarActions && sidebarHeader && !sidebarHeader.contains(sidebarActions)) {
+                    sidebarHeader.appendChild(sidebarActions);
+                    sidebarActions.style.cssText = '';
+                    Array.from(sidebarActions.children).forEach(b => {
+                        b.style.background = '';
+                        b.style.color = '';
+                        b.style.backdropFilter = '';
+                        b.style.borderRadius = '';
+                        b.style.width = '';
+                        b.style.height = '';
+                        b.style.display = '';
+                        b.style.alignItems = '';
+                        b.style.justifyContent = '';
+                        b.style.padding = '';
+                    });
+                }
+                if (!ui.sidebar.contains(ui.navbarInSidebar)) {
+                    ui.sidebar.appendChild(ui.navbarInSidebar);
+                    ui.navbarInSidebar.style.cssText = '';
+                }
+                if (window.innerWidth <= 909) {
+                    ui.sidebar.classList.remove('hidden');
+                    ui.chatContainer.classList.remove('active');
+                }
+            }
             await switchTab(btn.dataset.tab);
         });
     });
@@ -1019,7 +1052,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const overlay = document.createElement('div');
         overlay.id = 'server-join-overlay';
-        overlay.style.cssText = `position:fixed;inset:0;background:rgba(0,0,0,0.7);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);z-index:10005;display:flex;align-items:center;justify-content:center;padding:1rem;`;
 
         const card = document.createElement('div');
         card.style.cssText = `background:var(--secondary-bg);border-radius:var(--card-border-radius);padding:2rem;max-width:400px;width:100%;text-align:center;`;
@@ -1265,7 +1297,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     ui.profileStatusDot.classList.toggle('online', isOnline);
                     ui.profileStatusText.textContent = isOnline ? 'Online' : 'Offline';
                     ui.profileJoinedDate.textContent = 'N/A';
-                    showModal(ui.friendProfileModal);
+                    showProfileFromUserId(member.user_id);
+                    hideModal();
                 };
 
                 const infoEl = document.createElement('div');
@@ -1837,6 +1870,10 @@ document.addEventListener('DOMContentLoaded', () => {
             if (profile.avatar_url) {
                 ui.userAvatar.innerHTML = `<img src="${profile.avatar_url}" alt="${profile.username}">`;
                 ui.settingsAvatar.innerHTML = `<img src="${profile.avatar_url}" alt="${profile.username}">`;
+            }
+
+            if (profile.banner_url && ui.settingsBannerPreview) {
+                ui.settingsBannerPreview.style.backgroundImage = `url('${profile.banner_url}')`;
             }
 
             await supabaseClient.from('profiles').update({
@@ -3691,7 +3728,7 @@ document.addEventListener('DOMContentLoaded', () => {
             menuItem.className = 'context-menu-item';
             menuItem.innerHTML = `<i class="fa-solid ${item.icon}"></i> ${item.text}`;
             menuItem.style.cssText = `
-            padding: 0.75rem 1rem;
+            padding: 0.75rem 1.2rem;
             cursor: pointer;
             display: flex;
             align-items: center;
@@ -3840,6 +3877,11 @@ document.addEventListener('DOMContentLoaded', () => {
         avatarWrapper.className = 'message-avatar-wrapper';
         avatarWrapper.appendChild(avatarDiv);
         avatarWrapper.appendChild(usernameDiv);
+
+        avatarWrapper.style.cursor = 'pointer';
+        avatarWrapper.onclick = () => {
+            showProfileFromUserId(message.sender_id);
+        };
 
         const contentWrapper = document.createElement('div');
         contentWrapper.style.cssText = isMobile ? 'position: relative;' : '';
@@ -4355,7 +4397,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const showProfileFromUserId = async (userId) => {
         let profileData = null;
-
         if (userId === currentUser.id) {
             profileData = currentUser;
         } else if (friends[userId]) {
@@ -4363,84 +4404,14 @@ document.addEventListener('DOMContentLoaded', () => {
         } else {
             const { data } = await supabase
                 .from('profiles')
-                .select('id, username, avatar_url, created_at')
+                .select('id, username, avatar_url, created_at, description')
                 .eq('id', userId)
                 .single();
             profileData = data;
         }
-
         if (!profileData) return;
-
-        ui.profileUsername.textContent = profileData.username;
-        ui.profileUsernameValue.textContent = profileData.username;
-        ui.profileAvatar.textContent = profileData.username[0].toUpperCase();
-
-        if (profileData.avatar_url) {
-            ui.profileAvatar.innerHTML = `<img src="${profileData.avatar_url}" alt="${profileData.username}">`;
-        }
-
-        const isOnline = onlineUsers.has(profileData.id);
-        ui.profileStatusDot.classList.toggle('online', isOnline);
-        ui.profileStatusText.textContent = isOnline ? 'Online' : 'Offline';
-        ui.profileJoinedDate.textContent = profileData.created_at
-            ? new Date(profileData.created_at).toLocaleDateString()
-            : 'N/A';
-
-        const isFriend = !!friends[profileData.id];
-        const isSelf = profileData.id === currentUser.id;
-
-        let addFriendBtn = document.getElementById('profile-add-friend-btn');
-        if (!addFriendBtn) {
-            addFriendBtn = document.createElement('button');
-            addFriendBtn.id = 'profile-add-friend-btn';
-            addFriendBtn.style.cssText = 'margin-top:1rem;width:100%;';
-            ui.friendProfileModal.querySelector('.profile-info').after(addFriendBtn);
-        }
-
-        if (isSelf || isFriend) {
-            addFriendBtn.style.display = 'none';
-        } else {
-            addFriendBtn.style.display = 'block';
-            addFriendBtn.textContent = 'Add Friend';
-            addFriendBtn.onclick = async () => {
-                const { data: existing } = await supabase
-                    .from('friendships')
-                    .select('id')
-                    .or(`and(user_id.eq.${currentUser.id},friend_id.eq.${profileData.id}),and(user_id.eq.${profileData.id},friend_id.eq.${currentUser.id})`)
-                    .maybeSingle();
-
-                if (existing) {
-                    showInfo('Already sent', 'Friend request already exists or you are already friends.');
-                    return;
-                }
-
-                const { error } = await supabase
-                    .from('friendships')
-                    .insert([{ user_id: currentUser.id, friend_id: profileData.id, status: 'pending' }]);
-
-                if (error) {
-                    showInfo('Error', 'Failed to send friend request.');
-                    return;
-                }
-
-                addFriendBtn.textContent = 'Request Sent';
-                addFriendBtn.disabled = true;
-
-                const notifyChannel = supabaseClient.channel(`friend-requests-${profileData.id}`, {
-                    config: { broadcast: { self: false } }
-                });
-                await new Promise(resolve => notifyChannel.subscribe(s => s === 'SUBSCRIBED' && resolve()));
-                await notifyChannel.send({
-                    type: 'broadcast',
-                    event: 'friend_request',
-                    payload: { fromUserId: currentUser.id, fromUsername: currentUser.username }
-                });
-                supabaseClient.removeChannel(notifyChannel);
-            };
-        }
-
-        closeAllModals();
-        showModal(ui.friendProfileModal);
+        window.history.pushState({ path: `profile/@${profileData.username}` }, '', `/profile/@${profileData.username}`);
+        renderProfilePage(profileData);
     };
 
     window.editServerMessage = (messageId, content) => {
@@ -5816,23 +5787,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     ui.viewProfileBtn.onclick = async () => {
         if (currentChatType === 'friend' && currentChatFriend) {
-            ui.profileUsername.textContent = currentChatFriend.username;
-            ui.profileUsernameValue.textContent = currentChatFriend.username;
-            ui.profileAvatar.textContent = currentChatFriend.username[0].toUpperCase();
-
-            if (currentChatFriend.avatar_url) {
-                ui.profileAvatar.innerHTML = `<img src="${currentChatFriend.avatar_url}" alt="${currentChatFriend.username}">`;
-            }
-
-            const isOnline = onlineUsers.has(currentChatFriend.id);
-            ui.profileStatusDot.classList.toggle('online', isOnline);
-            ui.profileStatusText.textContent = isOnline ? 'Online' : 'Offline';
-
-            const joinedDate = new Date(currentChatFriend.created_at).toLocaleDateString();
-            ui.profileJoinedDate.textContent = joinedDate;
-
-            hideModal();
-            showModal(ui.friendProfileModal);
+            window.history.pushState({ path: `profile/@${currentChatFriend.username}` }, '', `/profile/@${currentChatFriend.username}`);
+            renderProfilePage(currentChatFriend);
         } else if (currentChatType === 'server' && currentServer) {
             ui.serverInfoBtn.click();
         }
@@ -6301,136 +6257,6 @@ document.addEventListener('DOMContentLoaded', () => {
     ui.readReceiptsToggle.onchange = () => {
         userSettings.readReceipts = ui.readReceiptsToggle.checked;
         saveSettings();
-    };
-
-    ui.settingsAvatar.onclick = () => {
-        ui.avatarUpload.click();
-    };
-
-    ui.avatarUpload.onchange = async (e) => {
-        const file = e.target.files[0];
-        if (!file) return;
-
-        if (!file.type.startsWith('image/')) {
-            showInfoModal('Invalid file', 'Please upload an image file.');
-            e.target.value = '';
-            return;
-        }
-
-        const maxSize = 25 * 1024 * 1024;
-        if (file.size > maxSize) {
-            showInfoModal('File too large', 'Please upload an image smaller than 25MB.');
-            e.target.value = '';
-            return;
-        }
-
-        try {
-            const compressedFile = await new Promise((resolve, reject) => {
-                const reader = new FileReader();
-                reader.onload = (event) => {
-                    const img = new Image();
-                    img.onload = () => {
-                        const canvas = document.createElement('canvas');
-                        const MAX_WIDTH = 800;
-                        const MAX_HEIGHT = 800;
-                        let width = img.width;
-                        let height = img.height;
-
-                        if (width > height) {
-                            if (width > MAX_WIDTH) {
-                                height *= MAX_WIDTH / width;
-                                width = MAX_WIDTH;
-                            }
-                        } else {
-                            if (height > MAX_HEIGHT) {
-                                width *= MAX_HEIGHT / height;
-                                height = MAX_HEIGHT;
-                            }
-                        }
-
-                        canvas.width = width;
-                        canvas.height = height;
-                        const ctx = canvas.getContext('2d');
-                        ctx.drawImage(img, 0, 0, width, height);
-
-                        canvas.toBlob((blob) => {
-                            if (blob) {
-                                resolve(new File([blob], file.name, { type: 'image/jpeg' }));
-                            } else {
-                                reject(new Error('Image compression failed'));
-                            }
-                        }, 'image/jpeg', 0.85);
-                    };
-                    img.onerror = () => reject(new Error('Failed to load image'));
-                    img.src = event.target.result;
-                };
-                reader.onerror = () => reject(new Error('Failed to read file'));
-                reader.readAsDataURL(file);
-            });
-
-            const fileExt = 'jpg';
-            const fileName = `${currentUser.id}-avatar-${Date.now()}.${fileExt}`;
-            const filePath = `avatars/${fileName}`;
-
-            const { error: uploadError } = await supabaseClient.storage
-                .from('avatars')
-                .upload(filePath, compressedFile, {
-                    upsert: true,
-                    contentType: 'image/jpeg'
-                });
-
-            if (uploadError) {
-                throw new Error(`Upload failed: ${uploadError.message}`);
-            }
-
-            const { data: { publicUrl } } = supabaseClient.storage
-                .from('avatars')
-                .getPublicUrl(filePath);
-
-            const { error: updateError } = await supabase
-                .from('profiles')
-                .update({ avatar_url: publicUrl })
-                .eq('id', currentUser.id);
-
-            if (updateError) {
-                throw new Error(`Profile update failed: ${updateError.message}`);
-            }
-
-            currentUser.avatar_url = publicUrl;
-            ui.settingsAvatar.innerHTML = `<img src="${publicUrl}" alt="${currentUser.username}">`;
-            ui.userAvatar.innerHTML = `<img src="${publicUrl}" alt="${currentUser.username}">`;
-
-            e.target.value = '';
-
-            for (const friendId in friends) {
-                const channel = supabaseClient.channel(`profile-updates-${friendId}`, {
-                    config: { broadcast: { self: false } }
-                });
-
-                await new Promise((resolve) => {
-                    channel.subscribe((status) => {
-                        if (status === 'SUBSCRIBED') resolve();
-                    });
-                });
-
-                await channel.send({
-                    type: 'broadcast',
-                    event: 'avatar_updated',
-                    payload: { userId: currentUser.id, avatarUrl: publicUrl }
-                });
-            }
-
-            showInfoModal('Success', 'Profile picture updated successfully!');
-
-        } catch (error) {
-            showInfoModal('Upload failed', error.message || 'Could not upload avatar. Please try again.');
-            e.target.value = '';
-        }
-    };
-
-    ui.changeUsernameBtn.onclick = () => {
-        hideSettingsModal();
-        showModal(ui.changeUsernameModal);
     };
 
     ui.callBtn.onclick = () => {
@@ -7127,16 +6953,6 @@ document.addEventListener('DOMContentLoaded', () => {
             video.muted = false;
         }
 
-        video.style.cssText = `
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-    display: block;
-    background: var(--primary-bg);
-    -webkit-transform: translateZ(0);
-    transform: translateZ(0);
-`;
-
         video.onloadedmetadata = () => {
             video.play().then(() => {
                 checkVideoState();
@@ -7561,12 +7377,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    ui.friendProfileModal.addEventListener('click', (e) => {
-        if (e.target === ui.friendProfileModal && window.innerWidth > 768) {
-            hideModal();
-        }
-    });
-
     ui.confirmationModal.addEventListener('click', (e) => {
         if (e.target === ui.confirmationModal && window.innerWidth > 768) {
             hideModal();
@@ -7600,6 +7410,409 @@ document.addEventListener('DOMContentLoaded', () => {
                 JSON.stringify({ is_online: false })
             );
         }
+    });
+
+    function showProfilePage() {
+        if (currentUser) {
+            window.history.pushState({ path: `profile/@${currentUser.username}` }, '', `/profile/@${currentUser.username}`);
+            renderProfilePage(currentUser);
+        }
+    }
+
+    async function renderProfilePage(profileData) {
+        const isMobile = window.innerWidth <= 909;
+
+        const existing = document.getElementById('profile-page');
+        if (existing) existing.remove();
+
+        if (isMobile) {
+            ui.sidebar.classList.add('hidden');
+            ui.chatContainer.classList.add('active');
+        }
+
+        ui.welcomeScreen.classList.add('hidden');
+        ui.chatView.classList.add('hidden');
+
+        const isOwnProfile = profileData.id === currentUser.id;
+        const isOnline = onlineUsers.has(profileData.id);
+        const isFriend = !!friends[profileData.id];
+
+        const { data: freshProfile } = await supabase
+            .from('profiles')
+            .select('description, created_at, banner_url, avatar_url, username')
+            .eq('id', profileData.id)
+            .single();
+
+        const description = freshProfile?.description || '';
+        const bannerUrl = freshProfile?.banner_url || '/images/banner.png';
+        const avatarUrl = freshProfile?.avatar_url || profileData.avatar_url;
+        const username = freshProfile?.username || profileData.username;
+
+        const page = document.createElement('div');
+        page.id = 'profile-page';
+        page.style.cssText = 'display:flex;flex-direction:column;height:100%;width:100%;overflow-y:auto;position:relative;background:var(--primary-bg);scrollbar-width:none;-ms-overflow-style:none;';
+
+        const cover = document.createElement('div');
+        cover.style.cssText = 'position:relative;width:100%;height:240px;flex-shrink:0;';
+        const coverImg = document.createElement('div');
+        coverImg.style.cssText = `position:absolute;inset:0;background-image:url('${bannerUrl}');background-size:cover;background-position:center;border-radius:0;overflow:hidden;`; cover.appendChild(coverImg);
+
+        const coverOverlay = document.createElement('div');
+        coverOverlay.style.cssText = 'position:absolute;inset:0;background:linear-gradient(to bottom,rgba(0,0,0,0.1) 0%,rgba(0,0,0,0.5) 100%);';
+        cover.appendChild(coverOverlay);
+
+        if (isMobile) {
+            const backBtn = document.createElement('button');
+            backBtn.style.cssText = 'position:absolute;top:1rem;left:1rem;z-index:100;background:rgba(0,0,0,0.4);color:#fff;border:none;width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:1rem;cursor:pointer;backdrop-filter:blur(8px);padding:0;';
+            backBtn.innerHTML = '<i class="fa-solid fa-arrow-left"></i>';
+            backBtn.onclick = () => {
+                page.remove();
+                ui.sidebar.appendChild(ui.navbarInSidebar);
+                ui.navbarInSidebar.style.cssText = '';
+                ui.sidebar.classList.remove('hidden');
+                ui.chatContainer.classList.remove('active');
+                ui.welcomeScreen.classList.remove('hidden');
+                window.history.pushState({}, '', '/');
+            };
+            cover.appendChild(backBtn);
+        }
+
+        if (isOwnProfile) {
+            const changeBannerBtn = document.createElement('button');
+            changeBannerBtn.innerHTML = '<i class="fa-solid fa-image"></i> Change Banner';
+
+            const bannerInput = document.createElement('input');
+            bannerInput.type = 'file';
+            bannerInput.accept = 'image/*';
+            bannerInput.style.display = 'none';
+
+            bannerInput.onchange = async (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+                changeBannerBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Uploading...';
+                changeBannerBtn.disabled = true;
+                await uploadBannerFile(file, (url) => {
+                    coverImg.style.backgroundImage = `url('${url}')`;
+                });
+                changeBannerBtn.innerHTML = '<i class="fa-solid fa-image"></i> Change Banner';
+                changeBannerBtn.disabled = false;
+                bannerInput.value = '';
+            };
+
+            changeBannerBtn.onclick = () => bannerInput.click();
+            cover.appendChild(bannerInput);
+            cover.appendChild(changeBannerBtn);
+        }
+
+        const avatarWrap = document.createElement('div');
+        avatarWrap.style.cssText = 'position:absolute;bottom:-44px;left:50%;transform:translateX(-50%);';
+
+        const avatarEl = document.createElement('div');
+        avatarEl.style.cssText = 'width:88px;height:88px;border-radius:50%;border:3px solid var(--primary-bg);background:var(--secondary-bg);display:flex;align-items:center;justify-content:center;font-size:2.2rem;font-weight:700;color:var(--primary-text);overflow:hidden;';
+        if (avatarUrl) {
+            avatarEl.innerHTML = `<img src="${avatarUrl}" style="width:100%;height:100%;object-fit:cover;">`;
+        } else {
+            avatarEl.textContent = (username || '?')[0].toUpperCase();
+        }
+
+        if (isOwnProfile) {
+            avatarEl.style.cursor = 'pointer';
+            avatarEl.title = 'Change avatar';
+            avatarEl.onclick = () => {
+                ui.profileAvatarUpload.click();
+            };
+            ui.profileAvatarUpload.onchange = async (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+                avatarEl.innerHTML = '<i class="fa-solid fa-spinner fa-spin" style="font-size:1.5rem;"></i>';
+                try {
+                    const fileName = `avatars/${currentUser.id}-${Date.now()}.jpg`;
+                    const { error: uploadError } = await supabaseClient.storage.from('avatars').upload(fileName, file, { upsert: true, contentType: file.type });
+                    if (uploadError) throw uploadError;
+                    const { data: { publicUrl } } = supabaseClient.storage.from('avatars').getPublicUrl(fileName);
+                    await supabase.from('profiles').update({ avatar_url: publicUrl }).eq('id', currentUser.id);
+                    currentUser.avatar_url = publicUrl;
+                    avatarEl.innerHTML = `<img src="${publicUrl}" style="width:100%;height:100%;object-fit:cover;">`;
+                    ui.userAvatar.innerHTML = `<img src="${publicUrl}" alt="${currentUser.username}">`;
+                    ui.settingsAvatar.innerHTML = `<img src="${publicUrl}" alt="${currentUser.username}">`;
+                } catch (err) {
+                    showInfo('Error', 'Failed to upload avatar.');
+                    avatarEl.textContent = (username || '?')[0].toUpperCase();
+                }
+                e.target.value = '';
+            };
+        }
+
+        const onlineDot = document.createElement('div');
+        onlineDot.style.cssText = `position:absolute;bottom:4px;right:4px;width:16px;height:16px;border-radius:50%;background:${isOnline ? 'var(--success)' : '#555'};border:2px solid var(--primary-bg);`;
+        avatarWrap.appendChild(avatarEl);
+        avatarWrap.appendChild(onlineDot);
+        cover.appendChild(avatarWrap);
+        page.appendChild(cover);
+
+        const body = document.createElement('div');
+        body.style.cssText = 'display:flex;flex-direction:column;align-items:center;padding:56px 1.5rem 6rem;gap:0.4rem;max-width:600px;margin:0 auto;width:100%;';
+
+        const nameEl = document.createElement('h2');
+        nameEl.textContent = username || '';
+        nameEl.style.cssText = 'font-size:1.4rem;font-weight:700;color:var(--primary-text);margin:0;';
+        body.appendChild(nameEl);
+
+        const handleEl = document.createElement('p');
+        handleEl.textContent = `@${username}`;
+        handleEl.style.cssText = 'font-size:0.85rem;color:var(--secondary-text);margin:0;';
+        body.appendChild(handleEl);
+
+        const statusEl = document.createElement('div');
+        statusEl.style.cssText = 'display:flex;align-items:center;gap:0.4rem;font-size:0.8rem;color:var(--secondary-text);margin-top:0.1rem;';
+        statusEl.innerHTML = `<span style="width:7px;height:7px;border-radius:50%;background:${isOnline ? 'var(--success)' : '#555'};display:inline-block;"></span>${isOnline ? 'Online' : 'Offline'}`;
+        body.appendChild(statusEl);
+
+        if (isOwnProfile) {
+            const descWrap = document.createElement('div');
+            descWrap.style.cssText = 'width:100%;margin-top:0.75rem;';
+
+            const descDisplay = document.createElement('p');
+            descDisplay.textContent = description || 'Tap to add a bio...';
+            descDisplay.style.cssText = `text-align:center;font-size:0.9rem;color:${description ? 'var(--primary-text)' : 'var(--secondary-text)'};line-height:1.5;cursor:pointer;padding:0.5rem;border-radius:var(--button-border-radius);transition:var(--transition-fast);`;
+
+            const descEditWrap = document.createElement('div');
+            descEditWrap.style.cssText = 'display:none;flex-direction:column;gap:0.5rem;';
+
+            const descInput = document.createElement('textarea');
+            descInput.value = description;
+            descInput.placeholder = 'Write a bio...';
+            descInput.maxLength = 150;
+            descInput.style.cssText = 'width:100%;background:var(--secondary-bg);border:none;border-radius:var(--button-border-radius);color:var(--primary-text);font-size:0.9rem;padding:0.75rem;resize:none;min-height:70px;font-family:inherit;outline:none;text-align:center;';
+
+            const descActions = document.createElement('div');
+            descActions.style.cssText = 'display:flex;gap:0.5rem;';
+
+            const saveDescBtn = document.createElement('button');
+            saveDescBtn.textContent = 'Save';
+            saveDescBtn.style.cssText = 'flex:1;padding:0.5rem;font-size:0.85rem;border-radius:var(--button-border-radius-round);';
+            saveDescBtn.onclick = async () => {
+                const val = descInput.value.trim();
+                const { error } = await supabase.from('profiles').update({ description: val }).eq('id', currentUser.id);
+                if (!error) {
+                    currentUser.description = val;
+                    descDisplay.textContent = val || 'Tap to add a bio...';
+                    descDisplay.style.color = val ? 'var(--primary-text)' : 'var(--secondary-text)';
+                }
+                descEditWrap.style.display = 'none';
+                descDisplay.style.display = '';
+            };
+
+            const cancelDescBtn = document.createElement('button');
+            cancelDescBtn.textContent = 'Cancel';
+            cancelDescBtn.style.cssText = 'flex:1;padding:0.5rem;font-size:0.85rem;background:var(--secondary-bg);color:var(--secondary-text);border-radius:var(--button-border-radius-round);';
+            cancelDescBtn.onclick = () => {
+                descInput.value = description;
+                descEditWrap.style.display = 'none';
+                descDisplay.style.display = '';
+            };
+
+            descDisplay.onclick = () => {
+                descDisplay.style.display = 'none';
+                descEditWrap.style.display = 'flex';
+                descInput.focus();
+            };
+
+            descActions.appendChild(saveDescBtn);
+            descActions.appendChild(cancelDescBtn);
+            descEditWrap.appendChild(descInput);
+            descEditWrap.appendChild(descActions);
+            descWrap.appendChild(descDisplay);
+            descWrap.appendChild(descEditWrap);
+            body.appendChild(descWrap);
+        } else if (description) {
+            const descEl = document.createElement('p');
+            descEl.textContent = description;
+            descEl.style.cssText = 'text-align:center;font-size:0.9rem;color:var(--primary-text);line-height:1.5;margin-top:0.5rem;';
+            body.appendChild(descEl);
+        }
+
+        if (freshProfile?.created_at) {
+            const joined = document.createElement('p');
+            joined.textContent = `Joined ${new Date(freshProfile.created_at).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}`;
+            joined.style.cssText = 'font-size:0.8rem;color:var(--secondary-text);margin-top:0.25rem;';
+            body.appendChild(joined);
+        }
+
+        if (!isOwnProfile) {
+            const actionRow = document.createElement('div');
+            actionRow.style.cssText = 'display:flex;gap:0.75rem;margin-top:1rem;width:100%;';
+
+            if (isFriend) {
+                const msgBtn = document.createElement('button');
+                msgBtn.innerHTML = '<i class="fa-solid fa-message"></i> Message';
+                msgBtn.style.cssText = 'flex:1;display:flex;align-items:center;justify-content:center;gap:0.5rem;padding:0.75rem;border-radius:var(--button-border-radius-round);font-size:0.9rem;background:var(--secondary-bg);';
+                msgBtn.onclick = () => {
+                    page.remove();
+                    if (isMobile) {
+                        ui.sidebar.classList.remove('hidden');
+                        ui.chatContainer.classList.remove('active');
+                    }
+                    switchTab('personal').then(() => {
+                        setTimeout(() => window.openChat(profileData.id, 'friend'), 100);
+                    });
+                };
+                actionRow.appendChild(msgBtn);
+            } else {
+                const addBtn = document.createElement('button');
+                addBtn.innerHTML = '<i class="fa-solid fa-user-plus"></i> Add Friend';
+                addBtn.style.cssText = 'flex:1;display:flex;align-items:center;justify-content:center;gap:0.5rem;padding:0.75rem;border-radius:var(--button-border-radius-round);font-size:0.9rem;';
+                addBtn.onclick = async () => {
+                    const { data: existing } = await supabase
+                        .from('friendships')
+                        .select('id')
+                        .or(`and(user_id.eq.${currentUser.id},friend_id.eq.${profileData.id}),and(user_id.eq.${profileData.id},friend_id.eq.${currentUser.id})`)
+                        .maybeSingle();
+                    if (existing) { showInfo('Already sent', 'Request already exists.'); return; }
+                    const { error } = await supabase.from('friendships').insert([{ user_id: currentUser.id, friend_id: profileData.id, status: 'pending' }]);
+                    if (!error) {
+                        addBtn.innerHTML = '<i class="fa-solid fa-check"></i> Request Sent';
+                        addBtn.disabled = true;
+                        const notifyChannel = supabaseClient.channel(`friend-requests-${profileData.id}`, { config: { broadcast: { self: false } } });
+                        await new Promise(r => notifyChannel.subscribe(s => s === 'SUBSCRIBED' && r()));
+                        await notifyChannel.send({ type: 'broadcast', event: 'friend_request', payload: { fromUserId: currentUser.id, fromUsername: currentUser.username } });
+                        supabaseClient.removeChannel(notifyChannel);
+                    }
+                };
+                actionRow.appendChild(addBtn);
+            }
+
+            body.appendChild(actionRow);
+        }
+
+        if (isOwnProfile) {
+            const editBtn = document.createElement('button');
+            editBtn.innerHTML = '<i class="fa-solid fa-pen"></i> Edit Profile';
+            editBtn.style.cssText = 'margin-top:1rem;padding:0.6rem 1.5rem;border-radius:var(--button-border-radius);font-size:0.85rem;background:var(--secondary-bg);color:var(--primary-text);display:flex;align-items:center;gap:0.5rem;';
+            editBtn.onclick = async () => {
+                const { data: fresh } = await supabase.from('profiles').select('description, banner_url').eq('id', currentUser.id).single();
+                const bio = fresh?.description || '';
+                const bannerUrl = fresh?.banner_url || '/images/banner.png';
+                if (ui.editBioInput) {
+                    ui.editBioInput.value = bio;
+                    if (ui.editBioCounter) ui.editBioCounter.textContent = `${bio.length}/150`;
+                }
+                if (ui.editBannerPreview) ui.editBannerPreview.style.backgroundImage = `url('${bannerUrl}')`;
+                showModal(ui.editProfileModal);
+            }; body.appendChild(editBtn);
+        }
+
+        page.appendChild(body);
+        ui.chatContainer.appendChild(page);
+
+        if (isMobile) {
+            document.body.appendChild(ui.navbarInSidebar);
+            ui.navbarInSidebar.style.cssText = '';
+        }
+    }
+
+    ui.settingsBannerPreview?.addEventListener('mouseenter', () => {
+        if (ui.settingsBannerOverlay) ui.settingsBannerOverlay.style.opacity = '1';
+    });
+    ui.settingsBannerPreview?.addEventListener('mouseleave', () => {
+        if (ui.settingsBannerOverlay) ui.settingsBannerOverlay.style.opacity = '0';
+    });
+    ui.settingsBannerPreview?.addEventListener('click', () => {
+        ui.bannerUpload?.click();
+    });
+
+    ui.bannerUpload?.addEventListener('change', async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        await uploadBannerFile(file, (url) => {
+            if (ui.settingsBannerPreview) ui.settingsBannerPreview.style.backgroundImage = `url('${url}')`;
+            const profilePage = document.getElementById('profile-page');
+            if (profilePage) renderProfilePage(currentUser);
+        });
+        e.target.value = '';
+    });
+
+    ui.editProfileBtn?.addEventListener('click', async () => {
+        const { data: fresh } = await supabase.from('profiles').select('description, banner_url').eq('id', currentUser.id).single();
+        const bio = fresh?.description || '';
+        const bannerUrl = fresh?.banner_url || '/images/banner.png';
+
+        if (ui.editBioInput) {
+            ui.editBioInput.value = bio;
+            if (ui.editBioCounter) ui.editBioCounter.textContent = `${bio.length}/150`;
+        }
+        if (ui.editBannerPreview) ui.editBannerPreview.style.backgroundImage = `url('${bannerUrl}')`;
+
+        hideSettingsModal();
+        showModal(ui.editProfileModal);
+    });
+
+    ui.editBioInput?.addEventListener('input', () => {
+        const len = ui.editBioInput.value.length;
+        if (ui.editBioCounter) ui.editBioCounter.textContent = `${len}/150`;
+    });
+
+    ui.editBannerPreview?.addEventListener('click', () => {
+        ui.editBannerUpload?.click();
+    });
+
+    ui.editBannerUpload?.addEventListener('change', async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        await uploadBannerFile(file, (url) => {
+            if (ui.editBannerPreview) ui.editBannerPreview.style.backgroundImage = `url('${url}')`;
+            if (ui.settingsBannerPreview) ui.settingsBannerPreview.style.backgroundImage = `url('${url}')`;
+        });
+        e.target.value = '';
+    });
+
+    async function uploadBannerFile(file, onSuccess) {
+        if (!file.type.startsWith('image/')) { showInfo('Invalid file', 'Please upload an image.'); return; }
+        try {
+            const compressed = await new Promise((resolve) => {
+                const reader = new FileReader();
+                reader.onload = (ev) => {
+                    const img = new Image();
+                    img.onload = () => {
+                        const canvas = document.createElement('canvas');
+                        canvas.width = 1200;
+                        canvas.height = Math.round(img.height * (1200 / img.width));
+                        const ctx = canvas.getContext('2d');
+                        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                        canvas.toBlob((blob) => resolve(new File([blob], file.name, { type: 'image/jpeg' })), 'image/jpeg', 0.85);
+                    };
+                    img.src = ev.target.result;
+                };
+                reader.readAsDataURL(file);
+            });
+            const fileName = `banner-${currentUser.id}-${Date.now()}.jpg`;
+            const { error: uploadError } = await supabaseClient.storage.from('files').upload(fileName, compressed, { upsert: true, contentType: 'image/jpeg' });
+            if (uploadError) throw uploadError;
+            const { data: { publicUrl } } = supabaseClient.storage.from('files').getPublicUrl(fileName);
+            await supabase.from('profiles').update({ banner_url: publicUrl }).eq('id', currentUser.id);
+            currentUser.banner_url = publicUrl;
+            onSuccess(publicUrl);
+        } catch (err) {
+            showInfo('Error', 'Failed to upload banner.');
+        }
+    }
+
+    ui.closeEditProfileBtn?.addEventListener('click', () => {
+        hideModal();
+    });
+
+    ui.editProfileContainer?.addEventListener('click', (e) => {
+        if (e.target === ui.editProfileContainer) hideModal();
+    });
+
+    ui.saveEditProfileBtn?.addEventListener('click', async () => {
+        const bio = ui.editBioInput?.value.trim() || '';
+        const { error } = await supabase.from('profiles').update({ description: bio }).eq('id', currentUser.id);
+        if (error) { showInfo('Error', 'Failed to save bio.'); return; }
+        currentUser.description = bio;
+        hideModal(); showInfo('Saved', 'Profile updated.');
+        const profilePage = document.getElementById('profile-page');
+        if (profilePage) renderProfilePage(currentUser);
     });
 
     handleAuth();
@@ -7685,6 +7898,24 @@ document.addEventListener('DOMContentLoaded', () => {
                 await switchTab('global');
                 break;
 
+            case 'profile':
+                if (id) {
+                    const handle = id.startsWith('@') ? id.slice(1) : id;
+                    const { data: profileUser } = await supabase
+                        .from('profiles')
+                        .select('id, username, avatar_url, created_at, description')
+                        .eq('username', handle)
+                        .maybeSingle();
+                    if (profileUser) {
+                        renderProfilePage(profileUser);
+                    } else {
+                        await switchTab('personal');
+                    }
+                } else {
+                    await switchTab('personal');
+                }
+                break;
+
             case 'settings':
                 showSettingsModal();
                 break;
@@ -7737,6 +7968,18 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     window.addEventListener('popstate', (e) => {
+        const existing = document.getElementById('profile-page');
+        if (existing) {
+            existing.remove();
+            if (!ui.sidebar.contains(ui.navbarInSidebar)) {
+                ui.sidebar.appendChild(ui.navbarInSidebar);
+                ui.navbarInSidebar.style.cssText = '';
+            }
+        }
+        if (window.innerWidth <= 909) {
+            ui.sidebar.classList.remove('hidden');
+            ui.chatContainer.classList.remove('active');
+        }
         if (e.state && e.state.path) {
             handleRouting();
         } else {
@@ -7746,7 +7989,6 @@ document.addEventListener('DOMContentLoaded', () => {
             currentServer = null;
         }
     });
-
 
     setTimeout(initializeFileAttachment, 500);
 });

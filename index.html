@@ -143,6 +143,10 @@
                 <i class="fa-solid fa-user"></i>
                 <span>Personal</span>
             </button>
+            <button class="navbar-btn" data-tab="profile">
+                <i class="fa-solid fa-circle-user"></i>
+                <span>Profile</span>
+            </button>
             <button class="navbar-btn" data-tab="global">
                 <i class="fa-solid fa-globe"></i>
                 <span>Global</span>
@@ -240,7 +244,8 @@
                         <div id="settings-avatar" class="avatar large-avatar"></div>
                         <h2 id="settings-username"></h2>
                         <input type="file" id="avatar-upload" accept="image/*" class="hidden">
-                        <button id="change-username-btn" class="secondary-btn">Change Username</button>
+                        <button id="change-username-btn" class="secondary-btn"
+                            style="width:100%;margin-top:0.5rem;">Change Username</button>
                     </div>
                 </div>
                 <div class="settings-section">
@@ -372,27 +377,6 @@
             </div>
         </div>
 
-        <div id="friend-profile-modal" class="hidden">
-            <div class="profile-header">
-                <div id="profile-avatar" class="avatar large-avatar"></div>
-                <h2 id="profile-username"></h2>
-                <div class="profile-status">
-                    <div class="status-dot" id="profile-status-dot"></div>
-                    <span id="profile-status-text">Offline</span>
-                </div>
-            </div>
-            <div class="profile-info">
-                <div class="info-item">
-                    <span class="info-label">Username: </span>
-                    <span class="info-value" id="profile-username-value"></span>
-                </div>
-                <div class="info-item">
-                    <span class="info-label">Member Since: </span>
-                    <span class="info-value" id="profile-joined-date"></span>
-                </div>
-            </div>
-        </div>
-
         <div id="change-username-modal" class="hidden">
             <h2>Change Username</h2>
             <p>Enter your new username.</p>
@@ -433,6 +417,31 @@
                 </div>
                 <button type="submit">Join</button>
             </form>
+        </div>
+
+        <div id="edit-profile-modal" class="hidden">
+            <h2>Edit Profile</h2>
+            <div class="settings-content">
+                <div class="settings-section">
+                    <h3>Banner Image</h3>
+                    <div id="edit-banner-preview" class="edit-banner-preview">
+                        <div class="edit-banner-overlay">
+                            <i class="fa-solid fa-image"></i>
+                            <span>Click to change banner</span>
+                        </div>
+                    </div>
+                    <input type="file" id="edit-banner-upload" accept="image/*" class="hidden">
+                </div>
+                <div class="settings-section">
+                    <h3>Bio</h3>
+                    <div class="setting-item">
+                        <textarea id="edit-bio-input" class="edit-bio-input" placeholder="Write something about yourself..."
+                            maxlength="150"></textarea>
+                        <span id="edit-bio-counter" class="char-count">0/150</span>
+                    </div>
+                </div>
+                <button id="save-edit-profile-btn">Save Changes</button>
+            </div>
         </div>
 
         <div id="server-info-modal" class="hidden">
@@ -484,6 +493,8 @@
 <audio id="incoming-call-audio" src="/audios/calling.mp3" loop preload="auto"></audio>
 <input type="file" id="file-input" class="hidden" multiple
     accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.txt,.zip,.rar">
+
+<input type="file" id="profile-avatar-upload" accept="image/*" class="hidden">
 
 <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.4/peerjs.min.js"></script>
