@@ -306,22 +306,8 @@ body {
         padding-top: env(safe-area-inset-top, 0px);
     }
 
-    #main-app {
-        padding-bottom: calc(60px + env(safe-area-inset-bottom, 0px));
-    }
-
     #chat-header {
         top: calc(10px + env(safe-area-inset-top, 0px));
-    }
-
-    #messages-container {
-        padding-top: calc(150px + env(safe-area-inset-top, 0px));
-    }
-
-    #message-form {
-        bottom: calc(env(safe-area-inset-bottom, 0px) + 70px);
-        margin-bottom: 0;
-        padding-bottom: 0;
     }
 }
 
