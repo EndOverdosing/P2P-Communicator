@@ -1476,8 +1476,6 @@ button.secondary:hover {
     margin-left: auto;
     margin-right: auto;
     position: fixed;
-    bottom: env(safe-area-inset-bottom, 0);
-    padding-bottom: calc(1rem + env(safe-area-inset-bottom, 0px));
 }
 
 #chat-container::before {
