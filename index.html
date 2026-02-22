@@ -1,503 +1,494 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<meta name="description" content="Palyra - Secure, decentralized, real-time communication.">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="description" content="Palyra - Secure, decentralized, real-time communication.">
 
-<meta property="og:image" content="/images/banner.png">
-<meta property="og:title" content="Palyra">
-<meta property="og:description" content="Palyra - Secure, decentralized, real-time communication.">
-<meta property="og:url" content="https://palyra.vercel.app/">
+    <meta property="og:image" content="/public/images/banner.png">
+    <meta property="og:title" content="Palyra">
+    <meta property="og:description" content="Palyra - Secure, decentralized, real-time communication.">
+    <meta property="og:url" content="https://palyra.vercel.app/">
 
-<meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:title" content="Palyra">
-<meta name="twitter:description" content="Palyra - Secure, decentralized, real-time communication.">
-<meta name="twitter:image" content="/images/banner.png">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Palyra">
+    <meta name="twitter:description" content="Palyra - Secure, decentralized, real-time communication.">
+    <meta name="twitter:image" content="/public/images/banner.png">
 
-<meta name="mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-title" content="Palyra">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="format-detection" content="telephone=no">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-title" content="Palyra">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="format-detection" content="telephone=no">
 
-<meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)">
-<meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+    <meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)">
+    <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
 
-<title>Palyra</title>
+    <title>Palyra</title>
 
-<link rel="icon" href="/images/favicon.ico">
-<link rel="manifest" href="/manifest.json">
-<link rel="stylesheet" href="/styling/index.css">
-<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.1.1/css/all.min.css" rel="stylesheet">
+    <link rel="icon" href="/images/favicon.ico">
+    <link rel="manifest" href="/manifest.json">
+    <link rel="stylesheet" href="/styling/index.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.1.1/css/all.min.css" rel="stylesheet">
 
 </head>
-    <div id="auth-container" class="hidden">
-        <div class="auth-background">
-            <div class="auth-grid"></div>
-        </div>
-        <div class="auth-card">
-            <div class="auth-logo">
-                <div class="logo-icon">
-                    <img src="/images/icon.png" alt="Palyra logo" width="50" height="50">
-                </div>
-                <h1 class="auth-title">Palyra</h1>
-            </div>
-            <p class="auth-subtitle">Secure, real-time communication.</p>
-            <div id="auth-forms">
-                <form id="login-form">
-                    <h2>Welcome Back</h2>
-                    <div class="input-group">
-                        <label for="login-username">Username</label>
-                        <input type="text" id="login-username" required autocomplete="username">
-                    </div>
-                    <div class="input-group">
-                        <label for="login-password">Password</label>
-                        <input type="password" id="login-password" required autocomplete="current-password">
-                    </div>
-                    <button type="submit">Login</button>
-                    <p class="auth-switch">Don't have an account? <a href="#" id="show-signup">Sign Up</a></p>
-                </form>
-
-                <form id="signup-form" class="hidden">
-                    <h2>Create Account</h2>
-                    <div class="input-group">
-                        <label for="signup-username">Username</label>
-                        <input type="text" id="signup-username" required autocomplete="username">
-                    </div>
-                    <div class="input-group">
-                        <label for="signup-password">Password</label>
-                        <input type="password" id="signup-password" required autocomplete="new-password">
-                    </div>
-                    <button type="submit">Sign Up</button>
-                    <p class="auth-switch">Already have an account? <a href="#" id="show-login">Login</a></p>
-                </form>
-            </div>
-            <p id="auth-status" class="status-message"></p>
-        </div>
-
-        <footer class="auth-footer">
-            <div class="footer-content">
-                <div class="footer-section">
-                    <h4>Palyra</h4>
-                    <p>Decentralized, peer-to-peer communication built for privacy and security.</p>
-                </div>
-                <div class="footer-section">
-                    <h4>Resources</h4>
-                    <a href="/privacy-policy" target="_blank" rel="noopener noreferrer">Privacy
-                        Policy</a>
-                    <a href="/terms-of-service" target="_blank" rel="noopener noreferrer">Terms of
-                        Service</a>
-                    <a href="/documentation" target="_blank" rel="noopener noreferrer">Documentation</a>
-                </div>
-                <div class="footer-section">
-                    <h4>Support</h4>
-                    <a href="https://github.com/endoverdosing/palyra" target="_blank" rel="noopener noreferrer">Send
-                        Feedback</a>
-                </div>
-                <div class="footer-section">
-                    <h4>Connect</h4>
-                    <div class="social-links">
-                        <a href="https://github.com/endoverdosing/Palyra" target="_blank" rel="noopener noreferrer">
-                            <i class="fab fa-github"></i> GitHub
-                        </a>
-                        <a href="https://discord.gg/94KwX2ZtzK" target="_blank" rel="noopener noreferrer">
-                            <i class="fab fa-discord"></i> Discord
-                        </a>
-                    </div>
-                </div>
-            </div>
-            <div class="footer-divider"></div>
-            <div class="footer-bottom">
-                <p>&copy; 2026 Palyra. End-to-end encrypted messaging.</p>
-            </div>
-        </footer>
+<div id="auth-container" class="hidden">
+    <div class="auth-background">
+        <div class="auth-grid"></div>
     </div>
-    <div id="main-app" class="hidden">
-        <aside id="sidebar">
-            <div class="sidebar-header">
-                <div class="user-profile">
-                    <div id="user-avatar" class="avatar"></div>
-                    <span id="username-display"></span>
-                </div>
-                <div class="sidebar-header-actions">
-                    <button id="notifications-btn" title="Notifications" class="notification-btn-wrapper">
-                        <i class="fa-solid fa-bell"></i>
-                        <span id="notifications-badge" class="notifications-badge hidden">0</span>
-                    </button>
-                    <button id="add-friend-btn" title="Add Friend"><i class="fa-solid fa-user-plus"></i></button>
-                    <button id="settings-btn" title="Settings"><i class="fa-solid fa-gear"></i></button>
-                    <button id="logout-btn" title="Logout"><i class="fa-solid fa-right-from-bracket"></i></button>
-                </div>
+    <div class="auth-card">
+        <div class="auth-logo">
+            <div class="logo-icon">
+                <img src="/images/icon.png" alt="Palyra logo" width="50" height="50">
             </div>
-            <div class="list-header">Conversations</div>
-            <div class="sidebar-actions" style="padding:0 1rem 0.5rem;">
-                <div class="search-input-wrapper" style="width:100%;">
-                    <i class="fa-solid fa-magnifying-glass"></i>
-                    <input type="text" id="search-input" placeholder="Search...">
+            <h1 class="auth-title">Palyra</h1>
+        </div>
+        <p class="auth-subtitle">Secure, real-time communication.</p>
+        <div id="auth-forms">
+            <form id="login-form">
+                <h2>Welcome Back</h2>
+                <div class="input-group">
+                    <label for="login-username">Username</label>
+                    <input type="text" id="login-username" required autocomplete="username">
                 </div>
+                <div class="input-group">
+                    <label for="login-password">Password</label>
+                    <input type="password" id="login-password" required autocomplete="current-password">
+                </div>
+                <button type="submit">Login</button>
+                <p class="auth-switch">Don't have an account? <a href="#" id="show-signup">Sign Up</a></p>
+            </form>
+
+            <form id="signup-form" class="hidden">
+                <h2>Create Account</h2>
+                <div class="input-group">
+                    <label for="signup-username">Username</label>
+                    <input type="text" id="signup-username" required autocomplete="username">
+                </div>
+                <div class="input-group">
+                    <label for="signup-password">Password</label>
+                    <input type="password" id="signup-password" required autocomplete="new-password">
+                </div>
+                <button type="submit">Sign Up</button>
+                <p class="auth-switch">Already have an account? <a href="#" id="show-login">Login</a></p>
+            </form>
+        </div>
+        <p id="auth-status" class="status-message"></p>
+    </div>
+
+    <footer class="auth-footer">
+        <div class="footer-content">
+            <div class="footer-section">
+                <h4>Palyra</h4>
+                <p>Decentralized, peer-to-peer communication built for privacy and security.</p>
             </div>
-            <nav id="content-list"></nav>
-            <nav id="navbar-in-sidebar">
-                <button class="navbar-btn active" data-tab="personal">
-                    <i class="fa-solid fa-user"></i>
-                    <span>Personal</span>
-                </button>
-                <button class="navbar-btn" data-tab="global">
-                    <i class="fa-solid fa-globe"></i>
-                    <span>Global</span>
-                </button>
-            </nav>
-        </aside>
-
-        <main id="chat-container">
-            <div id="welcome-screen">
-                <i class="fa-solid fa-comments"></i>
-                <h2 class="welcome-title-desktop">Select a chat to start messaging</h2>
-                <h2 class="welcome-title-mobile">Tap the menu below to get started</h2>
-                <p class="welcome-subtitle-desktop">Your conversations are secure and private.</p>
-                <p class="welcome-subtitle-mobile">Choose between Personal chats or Global servers</p>
-                <button id="open-navbar-btn" class="mobile-only navbar-trigger-btn">
-                    <span>Open Menu</span>
-                </button>
+            <div class="footer-section">
+                <h4>Resources</h4>
+                <a href="/privacy-policy" target="_blank" rel="noopener noreferrer">Privacy
+                    Policy</a>
+                <a href="/terms-of-service" target="_blank" rel="noopener noreferrer">Terms of
+                    Service</a>
+                <a href="/documentation" target="_blank" rel="noopener noreferrer">Documentation</a>
             </div>
-            <div id="chat-view" class="hidden">
-                <header id="chat-header">
-                    <button id="back-to-friends-btn" class="mobile-only"><i class="fa-solid fa-arrow-left"></i></button>
-                    <div class="friend-info">
-                        <div class="avatar-wrapper">
-                            <div id="chat-avatar" class="avatar"></div>
-                            <div id="chat-friend-status" class="status-indicator"></div>
-                        </div>
-                        <div class="chat-header-text">
-                            <span id="chat-friend-name"></span>
-                            <span id="chat-status-text" class="header-status"></span>
-                        </div>
-                    </div>
-                    <div class="chat-actions">
-                        <button id="call-btn" class="personal-chat-only"><i class="fa-solid fa-video"></i></button>
-                        <button id="server-info-btn" class="server-chat-only hidden"><i
-                                class="fa-solid fa-info-circle"></i></button>
-                    </div>
-                </header>
-                <div id="messages-container"></div>
-                <div id="typing-indicator" class="hidden">
-                    <div class="typing-bubble">
-                        <div class="typing-dots">
-                            <span class="typing-dot"></span>
-                            <span class="typing-dot"></span>
-                            <span class="typing-dot"></span>
-                        </div>
-                    </div>
-                </div>
-                <div id="reply-preview" class="hidden">
-                    <div class="reply-preview-content">
-                        <span class="reply-preview-text"></span>
-                    </div>
-                    <button id="cancel-reply-btn"><i class="fa-solid fa-times"></i></button>
-                </div>
-
-                <div id="file-attachment-preview" class="file-attachment-preview hidden"></div>
-
-                <div class="bottom-overlay">
-                    <img src="/images/icon.png" alt="Logo" class="overlay-logo">
-                    Join Our Discord
-                    <a href="https://discord.com/invite/94KwX2ZtzK" target="_blank">
-                        <button class="overlay-button"><i class="fa-solid fa-arrow-right"></i></button>
+            <div class="footer-section">
+                <h4>Support</h4>
+                <a href="https://github.com/endoverdosing/palyra" target="_blank" rel="noopener noreferrer">Send
+                    Feedback</a>
+            </div>
+            <div class="footer-section">
+                <h4>Connect</h4>
+                <div class="social-links">
+                    <a href="https://github.com/endoverdosing/Palyra" target="_blank" rel="noopener noreferrer">
+                        <i class="fab fa-github"></i> GitHub
+                    </a>
+                    <a href="https://discord.gg/94KwX2ZtzK" target="_blank" rel="noopener noreferrer">
+                        <i class="fab fa-discord"></i> Discord
                     </a>
                 </div>
-
-                <form id="message-form">
-                    <div class="message-input-wrapper">
-                        <button type="button" id="attach-file-btn" class="attach-file-btn" title="Attach File">
-                            <i class="fa-solid fa-paperclip"></i>
-                        </button>
-                        <textarea id="message-input" placeholder="Type a message..." autocomplete="off"
-                            rows="1"></textarea>
-                    </div>
-                </form>
             </div>
-        </main>
+        </div>
+        <div class="footer-divider"></div>
+        <div class="footer-bottom">
+            <p>&copy; 2026 Palyra. End-to-end encrypted messaging.</p>
+        </div>
+    </footer>
+</div>
+<div id="main-app" class="hidden">
+    <aside id="sidebar">
+        <div class="sidebar-header">
+            <div class="user-profile">
+                <div id="user-avatar" class="avatar"></div>
+                <span id="username-display"></span>
+            </div>
+            <div class="sidebar-header-actions">
+                <button id="notifications-btn" title="Notifications" class="notification-btn-wrapper">
+                    <i class="fa-solid fa-bell"></i>
+                    <span id="notifications-badge" class="notifications-badge hidden">0</span>
+                </button>
+                <button id="add-friend-btn" title="Add Friend"><i class="fa-solid fa-user-plus"></i></button>
+                <button id="settings-btn" title="Settings"><i class="fa-solid fa-gear"></i></button>
+                <button id="logout-btn" title="Logout"><i class="fa-solid fa-right-from-bracket"></i></button>
+            </div>
+        </div>
+        <div class="list-header">Conversations</div>
+        <div class="sidebar-actions" style="padding:0 1rem 0.5rem;">
+            <div class="search-input-wrapper" style="width:100%;">
+                <i class="fa-solid fa-magnifying-glass"></i>
+                <input type="text" id="search-input" placeholder="Search...">
+            </div>
+        </div>
+        <nav id="content-list"></nav>
+        <nav id="navbar-in-sidebar">
+            <button class="navbar-btn active" data-tab="personal">
+                <i class="fa-solid fa-user"></i>
+                <span>Personal</span>
+            </button>
+            <button class="navbar-btn" data-tab="global">
+                <i class="fa-solid fa-globe"></i>
+                <span>Global</span>
+            </button>
+        </nav>
+    </aside>
+
+    <div class="bottom-overlay">
+        <img src="/images/icon.png" alt="Logo" class="overlay-logo">
+        Join Our Discord
+        <a href="https://discord.com/invite/94KwX2ZtzK" target="_blank">
+            <button class="overlay-button"><i class="fa-solid fa-arrow-right"></i></button>
+        </a>
     </div>
 
-    <div id="modal-container" class="hidden">
-        <div id="modal-content">
-            <button id="close-modal-btn" class="close-btn">×</button>
-
-            <div id="add-friend-modal" class="hidden">
-                <h2>Add Friend</h2>
-                <p>Enter your friend's exact username.</p>
-                <form id="add-friend-form">
-                    <input type="text" id="friend-username-input" placeholder="Username..." autocomplete="off">
-                    <button type="submit">Send Request</button>
-                </form>
-            </div>
-
-            <div id="blocked-users-modal" class="hidden">
-                <h2>Blocked Users</h2>
-                <div id="blocked-users-list"></div>
-            </div>
-
-            <div id="notifications-modal" class="hidden">
-                <h2>Notifications</h2>
-                <div id="notifications-list"></div>
-            </div>
-
-            <div id="friend-requests-modal" class="hidden">
-                <h2>Friend Requests</h2>
-                <div id="requests-list"></div>
-            </div>
-
-            <div id="incoming-call-modal" class="hidden">
-                <div class="caller-info">
-                    <div id="caller-avatar" class="avatar"></div>
-                    <h3 id="caller-name"></h3>
-                    <p>is calling you...</p>
-                </div>
-                <div class="call-actions">
-                    <button id="decline-call-btn" class="danger"><i class="fa-solid fa-phone-slash"></i></button>
-                    <button id="accept-call-btn" class="success"><i class="fa-solid fa-phone"></i></button>
-                </div>
-            </div>
-
-            <div id="confirmation-modal" class="hidden">
-                <h2 id="confirmation-title">Are you sure?</h2>
-                <p id="confirmation-message"></p>
-                <div class="confirmation-actions">
-                    <button id="cancel-btn" class="secondary">Cancel</button>
-                    <button id="confirm-btn" class="danger">Confirm</button>
-                </div>
-            </div>
-
-            <div id="info-modal" class="hidden">
-                <h2 id="info-title">Notification</h2>
-                <p id="info-message"></p>
-                <div class="info-actions">
-                    <button id="info-ok-btn">OK</button>
-                </div>
-            </div>
-
-            <div id="chat-options-modal" class="hidden">
-                <h2>Chat Options</h2>
-                <div class="friend-options-list">
-                    <button class="option-btn" id="view-profile-btn">
-                        <i class="fa-solid fa-user"></i>
-                        <span>View Profile</span>
-                    </button>
-                    <button class="option-btn" id="mute-conversation-btn">
-                        <i class="fa-solid fa-bell-slash"></i>
-                        <span>Mute Conversation</span>
-                    </button>
-                    <button class="option-btn" id="block-user-btn">
-                        <i class="fa-solid fa-ban"></i>
-                        <span>Block User</span>
-                    </button>
-                    <button class="option-btn danger" id="unfriend-btn">
-                        <i class="fa-solid fa-user-minus"></i>
-                        <span>Remove Friend</span>
-                    </button>
-                </div>
-            </div>
-
-            <div id="friend-profile-modal" class="hidden">
-                <div class="profile-header">
-                    <div id="profile-avatar" class="avatar large-avatar"></div>
-                    <h2 id="profile-username"></h2>
-                    <div class="profile-status">
-                        <div class="status-dot" id="profile-status-dot"></div>
-                        <span id="profile-status-text">Offline</span>
+    <main id="chat-container">
+        <div id="welcome-screen">
+            <i class="fa-solid fa-comments"></i>
+            <h2 class="welcome-title-desktop">Select a chat to start messaging</h2>
+            <h2 class="welcome-title-mobile">Tap the menu below to get started</h2>
+            <p class="welcome-subtitle-desktop">Your conversations are secure and private.</p>
+            <p class="welcome-subtitle-mobile">Choose between Personal chats or Global servers</p>
+            <button id="open-navbar-btn" class="mobile-only navbar-trigger-btn">
+                <span>Open Menu</span>
+            </button>
+        </div>
+        <div id="chat-view" class="hidden">
+            <header id="chat-header">
+                <button id="back-to-friends-btn" class="mobile-only"><i class="fa-solid fa-arrow-left"></i></button>
+                <div class="friend-info">
+                    <div class="avatar-wrapper">
+                        <div id="chat-avatar" class="avatar"></div>
+                        <div id="chat-friend-status" class="status-indicator"></div>
+                    </div>
+                    <div class="chat-header-text">
+                        <span id="chat-friend-name"></span>
+                        <span id="chat-status-text" class="header-status"></span>
                     </div>
                 </div>
-                <div class="profile-info">
-                    <div class="info-item">
-                        <span class="info-label">Username: </span>
-                        <span class="info-value" id="profile-username-value"></span>
-                    </div>
-                    <div class="info-item">
-                        <span class="info-label">Member Since: </span>
-                        <span class="info-value" id="profile-joined-date"></span>
+                <div class="chat-actions">
+                    <button id="call-btn" class="personal-chat-only"><i class="fa-solid fa-video"></i></button>
+                    <button id="server-info-btn" class="server-chat-only hidden"><i
+                            class="fa-solid fa-info-circle"></i></button>
+                </div>
+            </header>
+            <div id="messages-container"></div>
+            <div id="typing-indicator" class="hidden">
+                <div class="typing-bubble">
+                    <div class="typing-dots">
+                        <span class="typing-dot"></span>
+                        <span class="typing-dot"></span>
+                        <span class="typing-dot"></span>
                     </div>
                 </div>
             </div>
-
-            <div id="change-username-modal" class="hidden">
-                <h2>Change Username</h2>
-                <p>Enter your new username.</p>
-                <form id="change-username-form">
-                    <input type="text" id="new-username-input" placeholder="New username..." autocomplete="off"
-                        required>
-                    <button type="submit">Update Username</button>
-                </form>
+            <div id="reply-preview" class="hidden">
+                <div class="reply-preview-content">
+                    <span class="reply-preview-text"></span>
+                </div>
+                <button id="cancel-reply-btn"><i class="fa-solid fa-times"></i></button>
             </div>
 
-            <div id="create-server-modal" class="hidden">
-                <h2>Create Server</h2>
-                <form id="create-server-form">
-                    <div class="input-group">
-                        <label for="server-name-input">Server Name</label>
-                        <input type="text" id="server-name-input" placeholder="My Server" required>
+            <div id="file-attachment-preview" class="file-attachment-preview hidden"></div>
+
+            <form id="message-form">
+                <div class="message-input-wrapper">
+                    <button type="button" id="attach-file-btn" class="attach-file-btn" title="Attach File">
+                        <i class="fa-solid fa-paperclip"></i>
+                    </button>
+                    <textarea id="message-input" placeholder="Type a message..." autocomplete="off" rows="1"></textarea>
+                </div>
+            </form>
+        </div>
+    </main>
+</div>
+
+<div id="modal-container" class="hidden">
+    <div id="modal-content">
+        <button id="close-modal-btn" class="close-btn">×</button>
+
+        <div id="add-friend-modal" class="hidden">
+            <h2>Add Friend</h2>
+            <p>Enter your friend's exact username.</p>
+            <form id="add-friend-form">
+                <input type="text" id="friend-username-input" placeholder="Username..." autocomplete="off">
+                <button type="submit">Send Request</button>
+            </form>
+        </div>
+
+        <div id="settings-modal" class="hidden">
+            <h2>Settings</h2>
+            <div class="settings-content">
+                <div class="settings-section">
+                    <div class="profile-header">
+                        <div id="settings-avatar" class="avatar large-avatar"></div>
+                        <h2 id="settings-username"></h2>
+                        <input type="file" id="avatar-upload" accept="image/*" class="hidden">
+                        <button id="change-username-btn" class="secondary-btn">Change Username</button>
                     </div>
-                    <div class="input-group">
+                </div>
+                <div class="settings-section">
+                    <h3>Appearance</h3>
+                    <div class="setting-item">
                         <label class="toggle-switch">
-                            <input type="checkbox" id="server-private-toggle">
+                            <input type="checkbox" id="theme-toggle">
                             <span class="toggle-slider"></span>
-                            <span class="toggle-label">Private Server</span>
+                            <span class="toggle-label">Dark Mode</span>
                         </label>
                     </div>
-                    <div class="input-group" id="server-password-group" style="display: none;">
-                        <label for="server-password-input">Password</label>
-                        <input type="password" id="server-password-input" placeholder="Enter password">
-                    </div>
-                    <button type="submit">Create Server</button>
-                </form>
-            </div>
-
-            <div id="join-server-modal" class="hidden">
-                <h2>Join Server</h2>
-                <form id="join-server-form">
-                    <div class="input-group">
-                        <label for="server-password-join">Password</label>
-                        <input type="password" id="server-password-join" placeholder="Enter server password" required>
-                    </div>
-                    <button type="submit">Join</button>
-                </form>
-            </div>
-
-            <div id="server-info-modal" class="hidden">
-                <h2 id="server-info-name"></h2>
-                <div class="server-info-content">
-                    <div class="info-item">
-                        <span class="info-label">Owner:</span>
-                        <span class="info-value" id="server-owner-name"></span>
-                    </div>
-                    <div class="info-item">
-                        <span class="info-label">Type:</span>
-                        <span class="info-value" id="server-type"></span>
-                    </div>
-                    <div class="info-item">
-                        <span class="info-label">Members:</span>
-                        <div id="server-members-list"></div>
+                    <div class="setting-item">
+                        <label for="font-size-select">Font Size</label>
+                        <select id="font-size-select">
+                            <option value="small">Small</option>
+                            <option value="medium" selected>Medium</option>
+                            <option value="large">Large</option>
+                        </select>
                     </div>
                 </div>
-                <div class="server-actions">
-                    <div id="server-owner-actions" style="display: none;">
-                        <button class="danger-btn" id="delete-server-btn">Delete Server</button>
+                <div class="settings-section">
+                    <h3>Notifications</h3>
+                    <div class="setting-item">
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="notifications-toggle" checked>
+                            <span class="toggle-slider"></span>
+                            <span class="toggle-label">Enable Notifications</span>
+                        </label>
                     </div>
-                    <button class="danger-btn" id="leave-server-modal-btn"
-                        style="background:var(--tertiary-bg);color:var(--primary-text);margin-top:0.5rem;">Leave
-                        Server</button>
+                    <div class="setting-item">
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="message-sound-toggle" checked>
+                            <span class="toggle-slider"></span>
+                            <span class="toggle-label">Message Sounds</span>
+                        </label>
+                    </div>
                 </div>
+                <div class="settings-section">
+                    <h3>Privacy</h3>
+                    <div class="setting-item">
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="online-status-toggle" checked>
+                            <span class="toggle-slider"></span>
+                            <span class="toggle-label">Show Online Status</span>
+                        </label>
+                    </div>
+                    <div class="setting-item">
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="read-receipts-toggle" checked>
+                            <span class="toggle-slider"></span>
+                            <span class="toggle-label">Read Receipts</span>
+                        </label>
+                    </div>
+                </div>
+                <div class="settings-section">
+                    <h3>Blocked Users</h3>
+                    <div class="setting-item">
+                        <button id="view-blocked-users-btn" class="secondary-btn" style="width:100%;padding:0.75rem;">
+                            <i class="fa-solid fa-ban"></i> Manage Blocked Users
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="blocked-users-modal" class="hidden">
+            <h2>Blocked Users</h2>
+            <div id="blocked-users-list"></div>
+        </div>
+
+        <div id="notifications-modal" class="hidden">
+            <h2>Notifications</h2>
+            <div id="notifications-list"></div>
+        </div>
+
+        <div id="friend-requests-modal" class="hidden">
+            <h2>Friend Requests</h2>
+            <div id="requests-list"></div>
+        </div>
+
+        <div id="incoming-call-modal" class="hidden">
+            <div class="caller-info">
+                <div id="caller-avatar" class="avatar"></div>
+                <h3 id="caller-name"></h3>
+                <p>is calling you...</p>
+            </div>
+            <div class="call-actions">
+                <button id="decline-call-btn" class="danger"><i class="fa-solid fa-phone-slash"></i></button>
+                <button id="accept-call-btn" class="success"><i class="fa-solid fa-phone"></i></button>
+            </div>
+        </div>
+
+        <div id="confirmation-modal" class="hidden">
+            <h2 id="confirmation-title">Are you sure?</h2>
+            <p id="confirmation-message"></p>
+            <div class="confirmation-actions">
+                <button id="cancel-btn" class="secondary">Cancel</button>
+                <button id="confirm-btn" class="danger">Confirm</button>
+            </div>
+        </div>
+
+        <div id="info-modal" class="hidden">
+            <h2 id="info-title">Notification</h2>
+            <p id="info-message"></p>
+            <div class="info-actions">
+                <button id="info-ok-btn">OK</button>
+            </div>
+        </div>
+
+        <div id="chat-options-modal" class="hidden">
+            <h2>Chat Options</h2>
+            <div class="friend-options-list">
+                <button class="option-btn" id="view-profile-btn">
+                    <i class="fa-solid fa-user"></i>
+                    <span>View Profile</span>
+                </button>
+                <button class="option-btn" id="mute-conversation-btn">
+                    <i class="fa-solid fa-bell-slash"></i>
+                    <span>Mute Conversation</span>
+                </button>
+                <button class="option-btn" id="block-user-btn">
+                    <i class="fa-solid fa-ban"></i>
+                    <span>Block User</span>
+                </button>
+                <button class="option-btn danger" id="unfriend-btn">
+                    <i class="fa-solid fa-user-minus"></i>
+                    <span>Remove Friend</span>
+                </button>
+            </div>
+        </div>
+
+        <div id="friend-profile-modal" class="hidden">
+            <div class="profile-header">
+                <div id="profile-avatar" class="avatar large-avatar"></div>
+                <h2 id="profile-username"></h2>
+                <div class="profile-status">
+                    <div class="status-dot" id="profile-status-dot"></div>
+                    <span id="profile-status-text">Offline</span>
+                </div>
+            </div>
+            <div class="profile-info">
+                <div class="info-item">
+                    <span class="info-label">Username: </span>
+                    <span class="info-value" id="profile-username-value"></span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">Member Since: </span>
+                    <span class="info-value" id="profile-joined-date"></span>
+                </div>
+            </div>
+        </div>
+
+        <div id="change-username-modal" class="hidden">
+            <h2>Change Username</h2>
+            <p>Enter your new username.</p>
+            <form id="change-username-form">
+                <input type="text" id="new-username-input" placeholder="New username..." autocomplete="off" required>
+                <button type="submit">Update Username</button>
+            </form>
+        </div>
+
+        <div id="create-server-modal" class="hidden">
+            <h2>Create Server</h2>
+            <form id="create-server-form">
+                <div class="input-group">
+                    <label for="server-name-input">Server Name</label>
+                    <input type="text" id="server-name-input" placeholder="My Server" required>
+                </div>
+                <div class="input-group">
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="server-private-toggle">
+                        <span class="toggle-slider"></span>
+                        <span class="toggle-label">Private Server</span>
+                    </label>
+                </div>
+                <div class="input-group" id="server-password-group" style="display: none;">
+                    <label for="server-password-input">Password</label>
+                    <input type="password" id="server-password-input" placeholder="Enter password">
+                </div>
+                <button type="submit">Create Server</button>
+            </form>
+        </div>
+
+        <div id="join-server-modal" class="hidden">
+            <h2>Join Server</h2>
+            <form id="join-server-form">
+                <div class="input-group">
+                    <label for="server-password-join">Password</label>
+                    <input type="password" id="server-password-join" placeholder="Enter server password" required>
+                </div>
+                <button type="submit">Join</button>
+            </form>
+        </div>
+
+        <div id="server-info-modal" class="hidden">
+            <h2 id="server-info-name"></h2>
+            <div class="server-info-content">
+                <div class="info-item">
+                    <span class="info-label">Owner:</span>
+                    <span class="info-value" id="server-owner-name"></span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">Type:</span>
+                    <span class="info-value" id="server-type"></span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">Members:</span>
+                    <div id="server-members-list"></div>
+                </div>
+            </div>
+            <div class="server-actions">
+                <div id="server-owner-actions" style="display: none;">
+                    <button class="danger-btn" id="delete-server-btn">Delete Server</button>
+                </div>
+                <button class="danger-btn" id="leave-server-modal-btn"
+                    style="background:var(--tertiary-bg);color:var(--primary-text);margin-top:0.5rem;">Leave
+                    Server</button>
             </div>
         </div>
     </div>
+</div>
 
-    <section id="call-section" class="hidden">
-        <div id="video-grid" class="video-grid"></div>
-        <div class="call-controls">
-            <button id="mute-btn" class="call-control-btn active">
-                <i class="fa-solid fa-microphone"></i>
-            </button>
-            <button id="toggle-video-btn" class="call-control-btn active">
-                <i class="fa-solid fa-video"></i>
-            </button>
-            <button id="stop-call-btn" class="call-control-btn end-call">
-                <i class="fa-solid fa-phone-slash"></i>
-            </button>
-            <button id="share-screen-btn" class="call-control-btn">
-                <i class="fa-solid fa-desktop"></i>
-            </button>
-        </div>
-    </section>
-
-    <div id="settings-modal-container">
-        <div id="settings-modal">
-            <div id="settings-modal-header">
-                <div class="drag-handle"></div>
-                <h2 id="settings-modal-title">Settings</h2>
-            </div>
-            <div id="settings-modal-body">
-                <div class="settings-content">
-                    <div class="settings-section">
-                        <div class="profile-header">
-                            <div id="settings-avatar" class="avatar large-avatar"></div>
-                            <h2 id="settings-username"></h2>
-                            <input type="file" id="avatar-upload" accept="image/*" class="hidden">
-                            <button id="change-username-btn" class="secondary-btn">Change Username</button>
-                        </div>
-                    </div>
-                    <div class="settings-section">
-                        <h3>Appearance</h3>
-                        <div class="setting-item">
-                            <label class="toggle-switch">
-                                <input type="checkbox" id="theme-toggle">
-                                <span class="toggle-slider"></span>
-                                <span class="toggle-label">Dark Mode</span>
-                            </label>
-                        </div>
-                        <div class="setting-item">
-                            <label for="font-size-select">Font Size</label>
-                            <select id="font-size-select">
-                                <option value="small">Small</option>
-                                <option value="medium" selected>Medium</option>
-                                <option value="large">Large</option>
-                            </select>
-                        </div>
-                    </div>
-                    <div class="settings-section">
-                        <h3>Notifications</h3>
-                        <div class="setting-item">
-                            <label class="toggle-switch">
-                                <input type="checkbox" id="notifications-toggle" checked>
-                                <span class="toggle-slider"></span>
-                                <span class="toggle-label">Enable Notifications</span>
-                            </label>
-                        </div>
-                        <div class="setting-item">
-                            <label class="toggle-switch">
-                                <input type="checkbox" id="message-sound-toggle" checked>
-                                <span class="toggle-slider"></span>
-                                <span class="toggle-label">Message Sounds</span>
-                            </label>
-                        </div>
-                    </div>
-                    <div class="settings-section">
-                        <h3>Privacy</h3>
-                        <div class="setting-item">
-                            <label class="toggle-switch">
-                                <input type="checkbox" id="online-status-toggle" checked>
-                                <span class="toggle-slider"></span>
-                                <span class="toggle-label">Show Online Status</span>
-                            </label>
-                        </div>
-                        <div class="setting-item">
-                            <label class="toggle-switch">
-                                <input type="checkbox" id="read-receipts-toggle" checked>
-                                <span class="toggle-slider"></span>
-                                <span class="toggle-label">Read Receipts</span>
-                            </label>
-                        </div>
-                    </div>
-                    <div class="settings-section">
-                        <h3>Blocked Users</h3>
-                        <div class="setting-item">
-                            <button id="view-blocked-users-btn" class="secondary-btn"
-                                style="width: 100%; padding: 0.75rem;">
-                                <i class="fa-solid fa-ban"></i> Manage Blocked Users
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
+<section id="call-section" class="hidden">
+    <div id="video-grid" class="video-grid"></div>
+    <div class="call-controls">
+        <button id="mute-btn" class="call-control-btn active">
+            <i class="fa-solid fa-microphone"></i>
+        </button>
+        <button id="toggle-video-btn" class="call-control-btn active">
+            <i class="fa-solid fa-video"></i>
+        </button>
+        <button id="stop-call-btn" class="call-control-btn end-call">
+            <i class="fa-solid fa-phone-slash"></i>
+        </button>
+        <button id="share-screen-btn" class="call-control-btn">
+            <i class="fa-solid fa-desktop"></i>
+        </button>
     </div>
+</section>
 
-    <audio id="incoming-call-audio" src="/audios/calling.mp3" loop preload="auto"></audio>
-    <input type="file" id="file-input" class="hidden" multiple
-        accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.txt,.zip,.rar">
+<audio id="incoming-call-audio" src="/audios/calling.mp3" loop preload="auto"></audio>
+<input type="file" id="file-input" class="hidden" multiple
+    accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.txt,.zip,.rar">
 
-    <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
-    <script src="https://unpkg.com/peerjs@1.5.5/dist/peerjs.min.js"></script>
-    <script type="module" src="/js/index.js"></script>
+<script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.4/peerjs.min.js"></script>
+<script type="module" src="/js/index.js"></script>
 </body>
 
 </html>

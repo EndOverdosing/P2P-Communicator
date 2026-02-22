@@ -14,10 +14,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const supabase = supabaseClient;
 
     const ui = {
-        settingsModalContainer: document.getElementById('settings-modal-container'),
-        settingsModalPane: document.getElementById('settings-modal'),
-        settingsModalHeader: document.getElementById('settings-modal-header'),
-        settingsModalBody: document.getElementById('settings-modal-body'),
+        settingsModal: document.getElementById('settings-modal'),
         authContainer: document.getElementById('auth-container'),
         mainApp: document.getElementById('main-app'),
         loginForm: document.getElementById('login-form'),
@@ -432,12 +429,6 @@ document.addEventListener('DOMContentLoaded', () => {
         subscriptions.push(channel);
     }
 
-    document.getElementById('notifications-btn')?.addEventListener('click', async () => {
-        await loadNotifications();
-        renderNotifications();
-        showModal(document.getElementById('notifications-modal'));
-    });
-
     async function fetchLinkPreview(url) {
         try {
             const { data: existing, error: selectError } = await supabase
@@ -818,6 +809,7 @@ document.addEventListener('DOMContentLoaded', () => {
         ui.modalContainer.classList.add('hidden');
         ui.addFriendModal?.classList.add('hidden');
         ui.friendRequestsModal?.classList.add('hidden');
+        ui.notificationsModal?.classList.add('hidden');
         ui.incomingCallModal?.classList.add('hidden');
         ui.confirmationModal?.classList.add('hidden');
         ui.infoModal?.classList.add('hidden');
@@ -1164,9 +1156,9 @@ document.addEventListener('DOMContentLoaded', () => {
             const userIds = [...new Set((data || []).map(msg => msg.user_id))];
             const userPromises = userIds.map(async (userId) => {
                 const { data: userData } = await supabaseClient
-                    .from('profiles').select('username, avatar_url')
+                    .from('profiles').select('username,avatar_url')
                     .eq('id', userId)
-                    .single();
+                    .maybeSingle();
                 return { userId, username: userData?.username, avatar_url: userData?.avatar_url };
             });
 
@@ -1706,9 +1698,41 @@ document.addEventListener('DOMContentLoaded', () => {
                     { urls: 'stun:stun.l.google.com:19302' },
                     { urls: 'stun:stun1.l.google.com:19302' },
                     { urls: 'stun:stun2.l.google.com:19302' },
-                    { urls: 'stun:stun.services.mozilla.com' }
+                    { urls: 'stun:stun.services.mozilla.com' },
+                    { urls: 'stun:stun.stunprotocol.org:3478' },
+                    {
+                        urls: 'turn:openrelay.metered.ca:80',
+                        username: 'openrelayproject',
+                        credential: 'openrelayproject'
+                    },
+                    {
+                        urls: 'turn:openrelay.metered.ca:443',
+                        username: 'openrelayproject',
+                        credential: 'openrelayproject'
+                    },
+                    {
+                        urls: 'turn:openrelay.metered.ca:443?transport=tcp',
+                        username: 'openrelayproject',
+                        credential: 'openrelayproject'
+                    },
+                    {
+                        urls: 'turn:relay.metered.ca:80',
+                        username: 'e8dd65f523b3b8a49a4742c3',
+                        credential: 'uBpLAFLHfgKkTfNt'
+                    },
+                    {
+                        urls: 'turn:relay.metered.ca:443',
+                        username: 'e8dd65f523b3b8a49a4742c3',
+                        credential: 'uBpLAFLHfgKkTfNt'
+                    },
+                    {
+                        urls: 'turn:relay.metered.ca:443?transport=tcp',
+                        username: 'e8dd65f523b3b8a49a4742c3',
+                        credential: 'uBpLAFLHfgKkTfNt'
+                    }
                 ],
-                iceCandidatePoolSize: 10
+                iceCandidatePoolSize: 10,
+                iceTransportPolicy: 'all'
             },
             debug: 1
         });
@@ -2559,14 +2583,16 @@ document.addEventListener('DOMContentLoaded', () => {
         const msgElement = document.querySelector(`[data-message-id="${message.id}"]`);
         if (msgElement) {
             const contentElement = msgElement.querySelector('.message-content');
-            if (contentElement) {
+            const contentWrapper = contentElement?.parentElement;
+            if (contentElement && contentWrapper) {
                 contentElement.textContent = message.content;
-                const editedBadge = msgElement.querySelector('.message-edited') || document.createElement('span');
-                editedBadge.className = 'message-edited';
-                editedBadge.textContent = '(edited)';
-                if (!msgElement.querySelector('.message-edited')) {
-                    contentElement.appendChild(editedBadge);
-                }
+                const existing = contentWrapper.querySelector('.message-edited');
+                if (existing) existing.remove();
+                const editedSpan = document.createElement('div');
+                editedSpan.className = 'message-edited';
+                editedSpan.style.cssText = 'font-size: 0.7rem; color: var(--secondary-text); margin-top: 0.15rem;';
+                editedSpan.textContent = 'edited';
+                contentWrapper.appendChild(editedSpan);
             }
         }
     };
@@ -2687,6 +2713,40 @@ document.addEventListener('DOMContentLoaded', () => {
             } else if (currentTab === 'global') {
                 const searchTerm = ui.searchInput?.value?.toLowerCase() || '';
                 const filteredServers = servers.filter(s => s.name.toLowerCase().includes(searchTerm));
+
+                const FEATURED_SERVER_ID = '70fc24a9-2e77-4c01-b13e-87ecd31d7191';
+                const featuredServer = filteredServers.find(s => s.id === FEATURED_SERVER_ID);
+                const remainingServers = filteredServers.filter(s => s.id !== FEATURED_SERVER_ID);
+
+                if (featuredServer) {
+                    const { data: featuredMembership } = await supabaseClient
+                        .from('server_members')
+                        .select('user_id')
+                        .eq('server_id', featuredServer.id)
+                        .eq('user_id', currentUser.id)
+                        .maybeSingle();
+
+                    const isJoined = !!featuredMembership;
+                    const memberCount = featuredServer.server_members?.[0]?.count || 0;
+                    const featuredDiv = document.createElement('div');
+                    featuredDiv.style.cssText = `margin: 0 0 12px 0; padding: 12px; background: var(--secondary-bg); border-radius: 8px; cursor: pointer;`;
+                    featuredDiv.innerHTML = `
+        <div style="display: flex; align-items: center; gap: 12px;">
+            <div style="width: 36px; height: 36px; border-radius: 8px; background: var(--primary-text); display: flex; align-items: center; justify-content: center; font-size: 0.9rem; font-weight: 600; color: var(--primary-bg);">${featuredServer.name.substring(0, 2).toUpperCase()}</div>
+            <div style="flex: 1;">
+                <div style="font-weight: 600; font-size: 0.9rem; color: var(--primary-text);">${featuredServer.name}</div>
+                <div style="font-size: 0.75rem; color: var(--secondary-text);">${memberCount} member${memberCount !== 1 ? 's' : ''}</div>
+            </div>
+            <button style="padding: 6px 12px; border-radius: 6px; font-size: 0.75rem; font-weight: 500; background: ${isJoined ? 'var(--tertiary-bg)' : 'var(--primary-text)'}; color: ${isJoined ? 'var(--secondary-text)' : 'var(--primary-bg)'}; border: none; cursor: pointer;">${isJoined ? 'Open' : 'Join'}</button>
+        </div>
+    `;
+                    featuredDiv.onmouseenter = () => featuredDiv.style.opacity = '0.85';
+                    featuredDiv.onmouseleave = () => featuredDiv.style.opacity = '1';
+                    featuredDiv.addEventListener('click', () => joinServer(featuredServer));
+                    ui.contentList.appendChild(featuredDiv);
+                }
+
+                const reorderedServers = remainingServers;
 
                 const joinedServers = [];
                 const unjoinedServers = [];
@@ -3254,15 +3314,15 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             });
 
-            if (msg.edited) {
-                const editedSpan = document.createElement('span');
-                editedSpan.className = 'message-edited';
-                editedSpan.style.cssText = 'font-size: 0.75rem; color: var(--secondary-text); margin-left: 0.5rem;';
-                editedSpan.textContent = '(edited)';
-                contentDiv.appendChild(editedSpan);
-            }
-
             contentWrapper.appendChild(contentDiv);
+
+            if (msg.edited) {
+                const editedSpan = document.createElement('div');
+                editedSpan.className = 'message-edited';
+                editedSpan.style.cssText = 'font-size: 0.7rem; color: var(--secondary-text); margin-top: 0.15rem;';
+                editedSpan.textContent = 'edited';
+                contentWrapper.appendChild(editedSpan);
+            }
             addLinkPreviewsToMessage(contentWrapper, msg.content);
         }
 
@@ -3977,14 +4037,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
             contentWrapper.appendChild(contentDiv);
             addLinkPreviewsToMessage(contentWrapper, message.content);
-
-            if (message.edited) {
-                const editedSpan = document.createElement('div');
-                editedSpan.className = 'message-edited';
-                editedSpan.style.cssText = 'font-size: 0.7rem; color: var(--secondary-text); margin-top: 0.15rem;';
-                editedSpan.textContent = 'edited';
-                contentWrapper.appendChild(editedSpan);
-            }
         }
 
         if (message.call_duration !== null && message.call_duration !== undefined) {
@@ -4005,6 +4057,14 @@ document.addEventListener('DOMContentLoaded', () => {
         reactionsDiv.dataset.messageId = message.id;
         reactionsDiv.style.cssText = 'display: flex; flex-wrap: wrap; gap: 0.25rem; margin-top: 0.25rem;';
         contentWrapper.appendChild(reactionsDiv);
+
+        if (message.edited) {
+            const editedSpan = document.createElement('div');
+            editedSpan.className = 'message-edited';
+            editedSpan.style.cssText = 'font-size: 0.7rem; color: var(--secondary-text); margin-top: 0.15rem;';
+            editedSpan.textContent = 'edited';
+            contentWrapper.appendChild(editedSpan);
+        }
 
         const timestamp = new Date(message.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
@@ -4158,9 +4218,9 @@ document.addEventListener('DOMContentLoaded', () => {
             const userIds = [...new Set((data || []).map(msg => msg.user_id))];
             const userPromises = userIds.map(async (userId) => {
                 const { data: userData } = await supabaseClient
-                    .from('profiles').select('username, avatar_url')
+                    .from('profiles').select('username,avatar_url')
                     .eq('id', userId)
-                    .single();
+                    .maybeSingle();
                 return { userId, username: userData?.username, avatar_url: userData?.avatar_url };
             });
 
@@ -4454,43 +4514,6 @@ document.addEventListener('DOMContentLoaded', () => {
             if (existingEdited) contentElement.appendChild(existingEdited);
         };
 
-        const saveEdit = async () => {
-            const newContent = textarea.value.trim();
-            if (!newContent || newContent === originalText) {
-                cancelEdit();
-                return;
-            }
-
-            editContainer.remove();
-            contentElement.style.display = '';
-            contentElement.textContent = '';
-            const textNode = document.createTextNode(newContent);
-            const editedSpan = document.createElement('span');
-            editedSpan.className = 'message-edited';
-            editedSpan.style.cssText = 'font-size: 0.75rem; color: var(--secondary-text); margin-left: 0.5rem;';
-            editedSpan.textContent = '(edited)';
-            contentElement.appendChild(textNode);
-            contentElement.appendChild(editedSpan);
-
-            try {
-                const { error } = await supabaseClient
-                    .from('server_messages')
-                    .update({
-                        content: newContent,
-                        edited: true
-                    })
-                    .eq('id', messageId)
-                    .eq('user_id', currentUser.id);
-
-                if (error) {
-                    showInfo('Error', 'Failed to save edit: ' + error.message);
-                    cancelEdit();
-                }
-            } catch (error) {
-                cancelEdit();
-            }
-        };
-
         saveBtn.onclick = saveEdit;
         cancelBtn.onclick = cancelEdit;
 
@@ -4611,6 +4634,11 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
+        const contentWrapper = contentElement.parentElement;
+        if (!contentWrapper) {
+            return;
+        }
+
         const originalText = content;
 
         const textarea = document.createElement('textarea');
@@ -4695,10 +4723,21 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const saveEdit = async () => {
             const newContent = textarea.value.trim();
-            if (!newContent) {
+            if (!newContent || newContent === originalText) {
                 cancelEdit();
                 return;
             }
+
+            editContainer.remove();
+            contentElement.style.display = '';
+            contentElement.textContent = '';
+            const textNode = document.createTextNode(newContent);
+            contentElement.appendChild(textNode);
+            editedSpan.className = 'message-edited';
+            editedSpan.style.cssText = 'font-size: 0.75rem; margin-top: 0.25rem;';
+            editedSpan.textContent = '(edited)';
+            const contentWrapper = contentElement.parentElement;
+            contentWrapper.appendChild(editedSpan);
 
             const { data: message, error: fetchError } = await supabase
                 .from('messages')
@@ -4714,7 +4753,31 @@ document.addEventListener('DOMContentLoaded', () => {
                 cancelEdit();
                 return;
             }
-            updateMessageInUI({ id: messageId, content: newContent, edited: true });
+
+            contentElement.innerHTML = '';
+            const urlRegex = /(https?:\/\/[^\s<>"{}|\\^`\[\]]+)/g;
+            const parts = newContent.split(urlRegex);
+            parts.forEach((part) => {
+                if (part.match(urlRegex)) {
+                    const link = document.createElement('a');
+                    link.href = part;
+                    link.target = '_blank';
+                    link.rel = 'noopener noreferrer';
+                    link.className = 'message-link';
+                    link.textContent = part;
+                    contentElement.appendChild(link);
+                } else if (part) {
+                    contentElement.appendChild(document.createTextNode(part));
+                }
+            });
+
+            const existingEdited = contentWrapper.querySelector('.message-edited');
+            if (existingEdited) existingEdited.remove();
+            const editedSpan = document.createElement('div');
+            editedSpan.className = 'message-edited';
+            editedSpan.style.cssText = 'font-size: 0.7rem; color: var(--secondary-text); margin-top: 0.15rem;';
+            editedSpan.textContent = 'edited';
+            contentWrapper.appendChild(editedSpan);
 
             if (message) {
                 const otherUserId = message.sender_id === currentUser.id ? message.receiver_id : message.sender_id;
@@ -5968,13 +6031,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
-    const securityHeaders = {
-        'Content-Security-Policy': "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self' wss: https:;",
-        'X-Content-Type-Options': 'nosniff',
-        'X-Frame-Options': 'DENY',
-        'X-XSS-Protection': '1; mode=block'
-    };
-
     const sanitizeHTML = (str) => {
         const temp = document.createElement('div');
         temp.textContent = str;
@@ -6180,6 +6236,18 @@ document.addEventListener('DOMContentLoaded', () => {
 
             if (authData.user) {
                 botDetection.cleanup('signup-form');
+
+                const FEATURED_SERVER_ID = '70fc24a9-2e77-4c01-b13e-87ecd31d7191';
+                try {
+                    await supabaseClient.from('server_members').insert({
+                        server_id: FEATURED_SERVER_ID,
+                        user_id: authData.user.id,
+                        joined_at: new Date().toISOString()
+                    });
+                } catch (error) {
+                    console.error('Failed to add user to global chat:', error);
+                }
+
                 location.reload();
             }
         } catch (error) {
@@ -6520,6 +6588,15 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
+        if (!peer || peer.destroyed) {
+            hideModal();
+            ui.incomingCallAudio.pause();
+            ui.incomingCallAudio.currentTime = 0;
+            incomingCallData = null;
+            showInfoModal('Not Ready', 'Call service is not available. Please refresh and try again.');
+            return;
+        }
+
         isInCall = true;
 
         hideModal();
@@ -6578,7 +6655,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 mediaConnection.on('stream', (remoteStream) => {
                     addVideoStream('remote', remoteStream, friends[callerId]);
                 });
-            } else {
             }
 
             const userId1 = currentUser.id < callerId ? currentUser.id : callerId;
@@ -6592,7 +6668,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (trackType === 'video') {
                     if (fromUser) {
                         remoteVideoStates[fromUser] = enabled;
-                    } else {
                     }
 
                     const remoteTile = document.getElementById('remote-video');
@@ -6616,7 +6691,6 @@ document.addEventListener('DOMContentLoaded', () => {
                                 remoteVideoElement.pause();
                             }
                         }
-                    } else {
                     }
                 }
             });
@@ -6676,9 +6750,10 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     const showOutgoingCallUI = (friendName) => {
+        const avatarContent = currentChatFriend?.avatar_url ? `<img src="${currentChatFriend.avatar_url}" alt="${friendName}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">` : friendName[0].toUpperCase();
         const callUIHTML = `
         <div id="outgoing-call-overlay" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.9); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 10000; color: white;">
-            <div class="avatar" style="width: 120px; height: 120px; font-size: 48px; margin-bottom: 2rem;">${friendName[0].toUpperCase()}</div>
+            <div class="avatar" style="width: 120px; height: 120px; font-size: 48px; margin-bottom: 2rem; overflow: hidden;">${avatarContent}</div>
             <h2 style="margin-bottom: 0.5rem;">Calling ${friendName}...</h2>
             <p style="color: rgba(255, 255, 255, 0.7); margin-bottom: 3rem;">Waiting for response</p>
             <button id="cancel-outgoing-call" style="padding: 1rem 2rem; background: var(--error); color: white; border: none; border-radius: var(--button-border-radius); cursor: pointer; font-size: 1rem;">
@@ -6748,6 +6823,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const startCall = async () => {
         if (!currentChatFriend || currentChatType !== 'friend') {
+            return;
+        }
+
+        if (!peer || peer.destroyed) {
+            showInfoModal('Not Ready', 'Call service is not available. Please refresh the page and try again.');
             return;
         }
 
@@ -7071,9 +7151,9 @@ document.addEventListener('DOMContentLoaded', () => {
         const placeholder = document.createElement('div');
         placeholder.className = 'video-off-placeholder';
         placeholder.innerHTML = `
-    <div class="avatar large-avatar">${user.username[0].toUpperCase()}</div>
-    <span>${user.username}</span>
-`;
+            <div class="avatar large-avatar">${user.avatar_url ? `<img src="${user.avatar_url}" alt="${user.username}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">` : user.username[0].toUpperCase()}</div>
+            <span>${user.username}</span>
+        `;
 
         const nameTag = document.createElement('div');
         nameTag.className = 'participant-name';
@@ -7475,94 +7555,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
-    const setupSettingsDrag = () => {
-        if (window.innerWidth > 768) {
-            return;
-        }
-
-        let isDragging = false;
-        let startY = 0;
-        let currentTranslate = 0;
-
-        const dragStart = (e) => {
-            if (window.innerWidth > 768) return;
-            isDragging = true;
-            startY = e.pageY || e.touches[0].pageY;
-            currentTranslate = 0;
-            ui.settingsModalPane.style.transition = 'none';
-        };
-
-        const dragMove = (e) => {
-            if (!isDragging || window.innerWidth > 768) return;
-            const currentY = e.pageY || e.touches[0].pageY;
-            const diffY = currentY - startY;
-
-            if (diffY > 0) {
-                currentTranslate = diffY;
-                ui.settingsModalPane.style.transform = `translateY(${diffY}px)`;
-            }
-        };
-
-        const dragEnd = (e) => {
-            if (!isDragging || window.innerWidth > 768) return;
-            isDragging = false;
-
-            const currentY = e.pageY || e.changedTouches[0].pageY;
-            const diffY = currentY - startY;
-
-            if (diffY > 100) {
-                ui.settingsModalPane.style.transition = 'transform 0.3s ease-out';
-                ui.settingsModalPane.style.transform = 'translateY(100%)';
-
-                if (ui.settingsModalBody._scrollListener) {
-                    ui.settingsModalBody.removeEventListener('scroll', ui.settingsModalBody._scrollListener);
-                    delete ui.settingsModalBody._scrollListener;
-                }
-
-                document.documentElement.style.setProperty('--settings-modal-after-opacity', 1);
-
-                setTimeout(() => {
-                    ui.settingsModalContainer.classList.remove('visible');
-                    ui.settingsModalPane.classList.remove('visible');
-                    ui.settingsModalPane.style.transform = '';
-                    ui.settingsModalPane.style.transition = '';
-
-                    if (window.location.pathname === '/settings') {
-                        updateURLPath('personal');
-                    }
-                }, 300);
-            } else {
-                ui.settingsModalPane.style.transition = 'transform 0.3s ease-out';
-                ui.settingsModalPane.style.transform = 'translateY(0)';
-
-                setTimeout(() => {
-                    ui.settingsModalPane.style.transition = '';
-                }, 300);
-            }
-        };
-
-        ui.settingsModalHeader.addEventListener('mousedown', dragStart);
-        document.addEventListener('mousemove', dragMove);
-        document.addEventListener('mouseup', dragEnd);
-
-        ui.settingsModalHeader.addEventListener('touchstart', dragStart, { passive: true });
-        document.addEventListener('touchmove', dragMove, { passive: false });
-        document.addEventListener('touchend', dragEnd, { passive: true });
-    };
-
-    ui.settingsModalContainer.addEventListener('click', (e) => {
-        if (e.target === ui.settingsModalContainer) {
-            hideSettingsModal();
-        } else {
-        }
-    });
-
-    document.addEventListener('keydown', (e) => {
-        if (e.key === 'Escape' && ui.settingsModalContainer.classList.contains('visible')) {
-            hideSettingsModal();
-        }
-    });
-
     ui.chatOptionsModal.addEventListener('click', (e) => {
         if (e.target === ui.chatOptionsModal) {
             hideModal();
@@ -7587,59 +7579,12 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    setupSettingsDrag();
-
     const showSettingsModal = () => {
-        ui.settingsModalContainer.classList.add('visible');
-        if (window.innerWidth <= 768) {
-            setTimeout(() => {
-                ui.settingsModalPane.classList.add('visible');
-            }, 10);
-        } else {
-        }
-
-        const handleSettingsScroll = () => {
-            const scrollTop = ui.settingsModalBody.scrollTop;
-            const fadeStart = 50;
-            const fadeEnd = 200;
-
-            let opacity = 1;
-            if (scrollTop > fadeStart) {
-                const fadeRange = fadeEnd - fadeStart;
-                const fadeProgress = Math.min((scrollTop - fadeStart) / fadeRange, 1);
-                opacity = 1 - fadeProgress;
-            }
-
-            document.documentElement.style.setProperty('--settings-modal-after-opacity', opacity);
-        };
-
-        handleSettingsScroll();
-        ui.settingsModalBody.addEventListener('scroll', handleSettingsScroll);
-        ui.settingsModalBody._scrollListener = handleSettingsScroll;
+        showModal(ui.settingsModal);
     };
 
     const hideSettingsModal = () => {
-        if (window.location.pathname === '/settings') {
-            updateURLPath('personal');
-        }
-
-        if (ui.settingsModalBody._scrollListener) {
-            ui.settingsModalBody.removeEventListener('scroll', ui.settingsModalBody._scrollListener);
-            delete ui.settingsModalBody._scrollListener;
-        }
-
-        document.documentElement.style.setProperty('--settings-modal-after-opacity', 1);
-
-        if (window.innerWidth <= 768) {
-            ui.settingsModalPane.classList.remove('visible');
-
-            setTimeout(() => {
-                ui.settingsModalContainer.classList.remove('visible');
-                ui.settingsModalPane.style.transform = '';
-            }, 300);
-        } else {
-            ui.settingsModalContainer.classList.remove('visible');
-        }
+        hideModal();
     };
 
     const adjustTextareaHeight = () => {
@@ -7658,6 +7603,66 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     handleAuth();
+
+    function initModalDrag() {
+        let startY = 0, currentY = 0, isDragging = false, dragHandled = false;
+
+        const getModalContent = () => document.getElementById('modal-content');
+
+        ui.modalContainer.addEventListener('touchstart', (e) => {
+            const modalContent = getModalContent();
+            if (!modalContent || !modalContent.contains(e.target)) return;
+            const touchY = e.touches[0].clientY;
+            const rect = modalContent.getBoundingClientRect();
+            if (touchY < rect.top + 40) {
+                startY = touchY;
+                isDragging = true;
+                dragHandled = false;
+                modalContent.style.transition = 'none';
+            }
+        }, { passive: true });
+
+        ui.modalContainer.addEventListener('touchmove', (e) => {
+            if (!isDragging) return;
+            const modalContent = getModalContent();
+            if (!modalContent) return;
+            currentY = e.touches[0].clientY;
+            const diff = currentY - startY;
+            if (diff < 0) {
+                isDragging = false;
+                return;
+            }
+            e.preventDefault();
+            dragHandled = true;
+            modalContent.style.transform = `translateY(${diff}px)`;
+        }, { passive: false });
+
+        ui.modalContainer.addEventListener('touchend', () => {
+            if (!isDragging) return;
+            isDragging = false;
+            const modalContent = getModalContent();
+            if (!modalContent) return;
+            const diff = currentY - startY;
+            if (dragHandled && diff > 100) {
+                modalContent.style.transition = 'transform 0.3s ease-out';
+                modalContent.style.transform = 'translateY(100%)';
+                setTimeout(() => {
+                    hideModal();
+                    modalContent.style.transform = '';
+                    modalContent.style.transition = '';
+                }, 300);
+            } else {
+                modalContent.style.transition = 'transform 0.3s ease-out';
+                modalContent.style.transform = 'translateY(0)';
+                setTimeout(() => {
+                    modalContent.style.transition = '';
+                }, 300);
+            }
+            dragHandled = false;
+        });
+    }
+
+    initModalDrag();
 
     const handleRouting = async () => {
         const path = window.location.pathname;

@@ -1,5 +1,5 @@
 :root {
-    --primary-accent: #F1F1F1;
+    --primary-accent: #eeeeee;
     --primary-bg: #ffffff;
     --secondary-bg: #e6e6e6;
     --secondary-bg-rgb: 242, 242, 242, 0.5;
@@ -318,15 +318,10 @@ body {
         padding-top: calc(150px + env(safe-area-inset-top, 0px));
     }
 
-   #message-form {
+    #message-form {
         bottom: calc(env(safe-area-inset-bottom, 0px) + 70px);
         margin-bottom: 0;
         padding-bottom: 0;
-    }
-
-    .bottom-overlay {
-        bottom: calc(env(safe-area-inset-bottom, 0px) + 140px);
-        margin-bottom: 0;
     }
 }
 
@@ -1543,18 +1538,22 @@ button.secondary:hover {
     justify-content: center;
     align-items: center;
     z-index: 10000;
-    padding: 1rem;
 }
 
 #modal-content {
     background-color: rgba(var(--secondary-bg-rgb));
     border-radius: var(--card-border-radius);
     padding: 2rem;
-    max-width: 500px;
     width: 100%;
-    max-height: 90vh;
+    max-width: 600px;
+    height: auto;
+    max-height: 70vh;
     overflow-y: auto;
-    position: relative;
+    overscroll-behavior: contain;
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
 }
 
 #modal-content::-webkit-scrollbar {
@@ -1582,6 +1581,7 @@ button.secondary:hover {
     padding: 0;
     width: auto;
     line-height: 1;
+    display: none;
 }
 
 .close-btn:hover {
@@ -1714,39 +1714,6 @@ select option {
     background: rgba(var(--tertiary-bg-rgb), 0.5);
 }
 
-#settings-modal-body::after {
-    content: '';
-    position: fixed;
-    inset: 0 0 auto 0;
-    height: 140px;
-    background: linear-gradient(to bottom,
-            color-mix(in srgb, var(--primary-text) 47.5%, transparent) 0%,
-            color-mix(in srgb, var(--primary-text) 42.5%, transparent) 30%,
-            color-mix(in srgb, var(--primary-text) 27.5%, transparent) 60%,
-            color-mix(in srgb, var(--primary-text) 7.5%, transparent) 85%,
-            transparent 100%);
-    backdrop-filter: blur(48px) saturate(1.15);
-    -webkit-backdrop-filter: blur(48px) saturate(1.15);
-    mask: linear-gradient(to bottom,
-            var(--primary-text) 0%,
-            color-mix(in srgb, var(--primary-text) 45%, transparent) 40%,
-            color-mix(in srgb, var(--primary-text) 30%, transparent) 70%,
-            transparent 100%);
-    -webkit-mask: linear-gradient(to bottom,
-            var(--primary-text) 0%,
-            color-mix(in srgb, var(--primary-text) 45%, transparent) 40%,
-            color-mix(in srgb, var(--primary-text) 30%, transparent) 70%,
-            transparent 100%);
-    z-index: 1;
-    pointer-events: none;
-    will-change: opacity, transform;
-    -webkit-transform: translateZ(0);
-    transform: translateZ(0);
-    transition: opacity 0.3s ease-out;
-    opacity: var(--settings-modal-after-opacity, 1);
-    display: block;
-}
-
 #settings-modal-container.visible {
     opacity: 1;
     pointer-events: auto;
@@ -1759,87 +1726,8 @@ select option {
     transition: opacity 0.3s ease;
 }
 
-#settings-modal {
-    border-radius: var(--card-border-radius);
-    z-index: 10002;
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
-    max-width: 600px;
-    height: 55vh;
-    width: 90%;
-    transform: translateY(0);
-    transition: none;
-}
-
-#settings-modal-container.visible #settings-modal {
-    transform: translateY(0);
-}
-
 #settings-modal.visible {
     transform: translateY(0);
-}
-
-#settings-modal-header {
-    padding: 0.75rem;
-    cursor: grab;
-    flex-shrink: 0;
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    z-index: 10;
-    background: transparent;
-    pointer-events: none;
-}
-
-#settings-modal-header:active {
-    cursor: grabbing;
-}
-
-#settings-modal-header .drag-handle {
-    width: 40px;
-    height: 4px;
-    background-color: var(--secondary-text);
-    border-radius: 2px;
-    margin: 0 auto;
-    pointer-events: auto;
-}
-
-#settings-modal-title {
-    text-align: center;
-    margin: 0 auto;
-    font-size: 1.25rem;
-    font-weight: 600;
-    color: var(--header-text);
-    pointer-events: auto;
-    padding: 0.5rem 1rem;
-    border-radius: var(--card-border-radius);
-    display: block;
-}
-
-#settings-modal-body {
-    flex: 1;
-    overflow-y: auto;
-    padding: 1.5rem;
-    padding-top: 5rem;
-    border-radius: none;
-    position: relative;
-    z-index: 1;
-    background-color: var(--primary-bg);
-}
-
-#settings-modal-body::-webkit-scrollbar {
-    width: 8px;
-}
-
-#settings-modal-body::-webkit-scrollbar-track {
-    background: transparent;
-}
-
-#settings-modal-body::-webkit-scrollbar-thumb {
-    background: var(--tertiary-bg);
-    border-radius: 4px;
 }
 
 .edit-input {
@@ -2259,7 +2147,7 @@ select option {
     right: 0;
     bottom: 0;
     background: var(--primary-bg);
-    z-index: 9999;
+    z-index: 99999;
     display: flex;
     flex-direction: column;
     height: 100%;
@@ -2310,6 +2198,7 @@ select option {
     gap: 0.5rem;
     padding: 0.5rem;
     overflow-y: auto;
+    height: 100%;
 }
 
 .participant-tile {
@@ -2663,10 +2552,6 @@ body[data-font-size="large"] {
     .auth-title {
         font-size: 1.5rem;
     }
-
-    #modal-content {
-        padding: 1rem;
-    }
 }
 
 @media (min-width: 769px) {
@@ -2879,7 +2764,6 @@ body[data-font-size="large"] {
 
 .avatar-preview:hover {
     border-color: var(--primary-accent);
-    transform: scale(1.05);
 }
 
 .avatar-placeholder {
@@ -3174,13 +3058,19 @@ body[data-font-size="large"] {
 .call-controls {
     display: flex;
     gap: 1rem;
-    background: var(--secondary-bg);
+    background: rgba(var(--tertiary-bg-rgb), 0.2);
+    backdrop-filter: blur(5px);
+    -webkit-backdrop-filter: blur(5px);
     border-radius: var(--card-border-radius-round);
     width: auto;
     margin: 0 auto;
-    margin-bottom: 1rem;
     padding: 1rem;
     flex-shrink: 0;
+    position: absolute;
+    bottom: 2rem;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 100;
 }
 
 .call-control-btn {
@@ -3316,12 +3206,6 @@ body[data-font-size="large"] {
 
 #change-username-form button[type="submit"]:active {
     transform: translateY(1px);
-}
-
-#add-friend-modal {
-    display: flex;
-    flex-direction: column;
-    gap: 0;
 }
 
 #add-friend-modal h2 {
@@ -3541,7 +3425,7 @@ body[data-font-size="large"] {
     display: flex;
     flex-direction: column;
     gap: 8px;
-    max-height: 300px;
+    max-height: 750px;
     overflow-y: auto;
     margin-top: 8px;
     padding: 8px;
@@ -3619,7 +3503,6 @@ body[data-font-size="large"] {
 
 .member-actions button:hover {
     opacity: 0.8;
-    transform: scale(1.05);
 }
 
 .server-actions {
@@ -3726,18 +3609,6 @@ body[data-font-size="large"] {
 }
 
 @media (max-width: 909px) {
-    #settings-modal {
-        border-radius: var(--card-border-radius) var(--card-border-radius) 0 0;
-        max-width: 100%;
-        width: 100%;
-        height: 85vh;
-        border-radius: 0;
-        border-top-left-radius: 16px;
-        border-top-right-radius: 16px;
-        transform: translateY(100%);
-        transition: transform 0.3s ease-out;
-    }
-
     #settings-modal-header .drag-handle {
         display: none;
     }
@@ -3905,10 +3776,6 @@ body[data-font-size="large"] {
 
     .mobile-only {
         display: block;
-    }
-
-    #modal-content {
-        padding: 1.5rem;
     }
 
     .profile-actions {
@@ -4346,7 +4213,6 @@ body[data-font-size="large"] {
 #floating-call-indicator:hover {
     animation: none;
     opacity: 1;
-    transform: scale(1.05);
     transition: transform 0.2s ease;
 }
 
@@ -4627,7 +4493,7 @@ body[data-font-size="large"] {
 
 .bottom-overlay {
     position: fixed;
-    bottom: 20px;
+    bottom: 80px;
     left: 50%;
     transform: translateX(-50%);
     font-size: 1rem;
@@ -4643,11 +4509,11 @@ body[data-font-size="large"] {
     font-family: var(--base-font-family);
     font-weight: 600;
     text-decoration: none;
-    z-index: 99999999999;
+    z-index: 10000;
     transition: var(--transition-fast);
-    margin-bottom: 60px;
     width: 300px;
     opacity: 0.2;
+    display: none;
 }
 
 .bottom-overlay:hover {
@@ -4749,7 +4615,6 @@ body[data-font-size="large"] {
 
 .audio-play-btn:hover {
     opacity: 0.9;
-    transform: scale(1.05);
 }
 
 .audio-play-btn i {
@@ -4785,4 +4650,43 @@ body[data-font-size="large"] {
     min-width: 35px;
     text-align: right;
     flex-shrink: 0;
+}
+
+@media (max-width: 909px) {
+    #modal-container {
+        align-items: flex-end;
+        justify-content: stretch;
+        backdrop-filter: blur(8px);
+        -webkit-backdrop-filter: blur(8px);
+    }
+
+    #modal-content {
+        border-radius: 20px 20px 0 0;
+        width: 100%;
+        max-width: 100%;
+        position: fixed;
+        bottom: 0;
+        top: auto;
+        left: 0;
+        right: 0;
+        transform: none;
+        padding-top: 2rem;
+        height: auto;
+        max-height: 60vh;
+        overflow-y: auto;
+        touch-action: pan-y;
+    }
+
+    #modal-content::before {
+        content: '';
+        position: sticky;
+        top: 0;
+        display: block;
+        width: 36px;
+        height: 4px;
+        background: var(--border-color);
+        border-radius: 2px;
+        margin: 0 auto;
+        z-index: 1;
+    }
 }
