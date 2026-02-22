@@ -783,7 +783,6 @@ button.secondary:hover {
     display: flex;
     flex-direction: column;
     background-color: var(--primary-bg);
-    padding-bottom: env(safe-area-inset-bottom, 0px);
 }
 
 #chat-container::after {
@@ -864,6 +863,17 @@ button.secondary:hover {
     flex-direction: column;
     height: 100%;
     position: relative;
+}
+
+#chat-view::after {
+    content: '';
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: env(safe-area-inset-bottom, 0px);
+    background-color: var(--primary-bg);
+    z-index: 9;
 }
 
 #chat-header {
@@ -1457,7 +1467,7 @@ button.secondary:hover {
     background: transparent;
     flex-shrink: 0;
     position: absolute;
-    bottom: 0;
+    bottom: env(safe-area-inset-bottom, 0px);
     left: 0;
     right: 0;
     z-index: 10;
