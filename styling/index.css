@@ -864,6 +864,8 @@ button.secondary:hover {
     flex-direction: column;
     height: 100%;
     position: relative;
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    background-color: var(--primary-bg);
 }
 
 #chat-header {
@@ -1465,6 +1467,7 @@ button.secondary:hover {
     width: 50%;
     margin-left: auto;
     margin-right: auto;
+    margin-bottom: 10px;
 }
 
 .message-input-wrapper {
