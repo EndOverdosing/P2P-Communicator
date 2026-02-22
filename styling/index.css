@@ -3595,12 +3595,6 @@ body[data-font-size="large"] {
     display: block;
 }
 
-@media (min-width: 769px) {
-    #main-app {
-        padding-bottom: 0;
-    }
-}
-
 @media (max-width: 909px) {
     #settings-modal-header .drag-handle {
         display: none;
@@ -3730,10 +3724,6 @@ body[data-font-size="large"] {
         background: none;
     }
 
-    #main-app {
-        padding-bottom: 60px;
-    }
-
     #sidebar.open {
         left: 0;
     }
@@ -3845,10 +3835,6 @@ body[data-font-size="large"] {
         background: none;
     }
 
-    #main-app {
-        padding-bottom: 60px;
-    }
-
     #sidebar.open {
         left: 0;
     }
@@ -3895,12 +3881,6 @@ body[data-font-size="large"] {
 
     #share-screen-btn {
         display: none !important;
-    }
-}
-
-@media (min-width: 769px) {
-    #main-app {
-        padding-bottom: 0;
     }
 }
 
